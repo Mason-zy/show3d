@@ -165,9 +165,12 @@ export const plyLoader = {
     }
 
     const buf = await main.arrayBuffer();
-    // PLYLoader 默认只认 xyz/法线/颜色，回波强度要显式登记才会保留
+    // PLYLoader 默认只认 xyz/法线/颜色，回波强度要显式登记才会保留。
+    // 但登记之后，即使文件里没有这个属性，它也可能给出一个全 NaN 的占位，
+    // 所以先看文件头里到底有没有。
+    const hasIntensityProp = !!head.vertexEl?.props?.some((p) => p.name === 'intensity');
     const loader = new PLYLoader();
-    loader.setCustomPropertyNameMapping({ intensity: ['intensity'] });
+    if (hasIntensityProp) loader.setCustomPropertyNameMapping({ intensity: ['intensity'] });
     const geo = loader.parse(buf);
 
     if (head.isMesh) {
@@ -183,14 +186,20 @@ export const plyLoader = {
     if (colors && colors.length > pos.count * 3) colors.length = pos.count * 3;
     const points = makePoints(positions, colors, null);
 
-    const inten = geo.getAttribute('intensity');
+    const inten = hasIntensityProp ? geo.getAttribute('intensity') : null;
     let note;
     if (inten && inten.count === pos.count) {
       const src = inten.array;
       const arr = new Float32Array(src.length);
       for (let i = 0; i < src.length; i++) arr[i] = src[i];
-      points.userData.intensity = arr;
-      note = `${pos.count.toLocaleString('en-US')} 点 · 含强度${colors ? '与 RGB' : ''}`;
+      // 全 NaN 说明这个属性其实没填上，宁可不给
+      const valid = arr.some((v) => Number.isFinite(v));
+      if (valid) {
+        points.userData.intensity = arr;
+        note = `${pos.count.toLocaleString('en-US')} 点 · 含强度${colors ? '与 RGB' : ''}`;
+      } else {
+        note = `${pos.count.toLocaleString('en-US')} 点`;
+      }
     } else {
       note = `${pos.count.toLocaleString('en-US')} 点`;
     }

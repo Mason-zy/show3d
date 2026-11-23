@@ -71,3 +71,25 @@ python tools/make-laz.py         # 生成 scan.laz，需要 pip install laspy la
 - 顶点色按线性空间写入（three 的颜色管理），否则点云会整体发白。
 - 网格材质用 `DoubleSide`：第三方导出的文件绕序经常不一致，靠背面剔除会丢面。
 - `laz-perf` 的 `LASZip.open()` 必须传入**完整 LAZ 文件**，只给点数据段会抛 C++ 异常。
+
+## 部署
+
+静态站点，`dist/` 扔到任何 nginx 后面就能跑。
+
+`tools/deploy-gx.sh` 是本机到 `gx` 的发布脚本（构建 → 打包 → scp → 解包 → 自检）：
+
+```bash
+bash tools/deploy-gx.sh
+```
+
+gx 上的容器是这样起的，文件挂载进去，更新内容不需要重启：
+
+```bash
+docker run -d --name show3d --restart unless-stopped \
+  -p 172.17.0.1:18080:80 \
+  -v /data/home/kit/Project/show3d:/usr/share/nginx/html:ro \
+  nginx:1.27-alpine
+```
+
+只绑定 docker 网桥地址，公网 IP 直连不可达；对外由 Cloudflare Tunnel
+把域名转发到 `http://172.17.0.1:18080`。

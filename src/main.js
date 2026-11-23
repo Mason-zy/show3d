@@ -161,7 +161,7 @@ function renderTabs() {
   ui.tabs.hidden = docs.length === 0;
   ui.tabList.innerHTML = docs
     .map(
-      (d) => `<div class="tab${d === active ? ' is-on' : ''}" data-id="${d.id}">
+      (d) => `<div class="tab${d === active ? ' is-on' : ''}" data-id="${d.id}" draggable="true">
         <button class="tab-main" data-id="${d.id}" title="${esc(d.name)}">
           <span class="tab-name">${esc(d.name)}</span>
         </button>
@@ -374,6 +374,73 @@ ui.tabList.addEventListener('click', (e) => {
 
 ui.tabAdd.addEventListener('click', () => ui.fileInput.click());
 
+/* 拖动标签调整顺序 */
+let dragTabId = null;
+let dropHintEl = null;
+
+function clearDropHint() {
+  if (dropHintEl) dropHintEl.classList.remove('drop-before', 'drop-after');
+  dropHintEl = null;
+}
+
+/** 找鼠标落在哪个标签的前/后半区 */
+function dropTarget(clientX) {
+  const tabs = [...ui.tabList.querySelectorAll('.tab')];
+  for (const el of tabs) {
+    const r = el.getBoundingClientRect();
+    if (clientX < r.left + r.width / 2) return { el, beforeId: Number(el.dataset.id) };
+  }
+  const last = tabs[tabs.length - 1];
+  return { el: last, beforeId: null };
+}
+
+ui.tabList.addEventListener('dragstart', (e) => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  dragTabId = Number(tab.dataset.id);
+  tab.classList.add('is-dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(dragTabId));
+});
+
+ui.tabList.addEventListener('dragend', () => {
+  dragTabId = null;
+  clearDropHint();
+  ui.tabList.querySelectorAll('.tab').forEach((t) => t.classList.remove('is-dragging'));
+});
+
+ui.tabList.addEventListener('dragover', (e) => {
+  if (dragTabId == null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const { el, beforeId } = dropTarget(e.clientX);
+  if (el === dropHintEl) return;
+  clearDropHint();
+  if (!el) return;
+  el.classList.add(beforeId == null ? 'drop-after' : 'drop-before');
+  dropHintEl = el;
+});
+
+ui.tabList.addEventListener('drop', (e) => {
+  if (dragTabId == null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const { beforeId } = dropTarget(e.clientX);
+  reorderTabs(dragTabId, beforeId);
+  clearDropHint();
+  dragTabId = null;
+  renderTabs();
+});
+
+function reorderTabs(id, beforeId) {
+  const from = docs.findIndex((d) => d.id === id);
+  if (from < 0) return;
+  const [doc] = docs.splice(from, 1);
+  let to = beforeId == null ? docs.length : docs.findIndex((d) => d.id === beforeId);
+  if (to < 0) to = docs.length;
+  docs.splice(to, 0, doc);
+}
+
 /* 收起 / 展开侧栏，把整块让给视口 */
 $('btn-rail').addEventListener('click', () => {
   const btn = $('btn-rail');
@@ -434,16 +501,24 @@ function showVeil(on) {
   ui.veil.classList.toggle('is-on', on);
 }
 
+/** 只接文件，标签拖动不算 */
+function hasFiles(e) {
+  return !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+}
+
 ui.stage.addEventListener('dragenter', (e) => {
+  if (!hasFiles(e)) return;
   e.preventDefault();
   dragDepth++;
   showVeil(true);
 });
 ui.stage.addEventListener('dragover', (e) => {
+  if (!hasFiles(e)) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = 'copy';
 });
 ui.stage.addEventListener('dragleave', (e) => {
+  if (!hasFiles(e)) return;
   e.preventDefault();
   if (--dragDepth <= 0) {
     dragDepth = 0;
@@ -451,10 +526,11 @@ ui.stage.addEventListener('dragleave', (e) => {
   }
 });
 ui.stage.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
   e.preventDefault();
   dragDepth = 0;
   showVeil(false);
-  if (e.dataTransfer?.files?.length) openFiles(e.dataTransfer.files);
+  if (e.dataTransfer.files.length) openFiles(e.dataTransfer.files);
 });
 
 // 页面其它区域也别让浏览器直接打开文件

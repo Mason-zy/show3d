@@ -361,6 +361,10 @@ button {
   background: var(--prussian);
 }
 
+.seg-item[hidden] {
+  display: none;
+}
+
 /* 滑杆 */
 .slider {
   display: grid;

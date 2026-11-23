@@ -103,7 +103,8 @@ export function applyPointScale(object3d) {
   const size = Math.max((diag * 0.0032) / density, 1e-6);
 
   object3d.traverse((o) => {
-    if (o.isPoints && o.material) o.material.size = size;
+    // 轨迹站点这类"装饰点"自己定尺寸，不跟点云一起缩
+    if (o.isPoints && o.material && !o.userData.fixedColor) o.material.size = size;
   });
   return size;
 }

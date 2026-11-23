@@ -165,7 +165,10 @@ export const plyLoader = {
     }
 
     const buf = await main.arrayBuffer();
-    const geo = new PLYLoader().parse(buf);
+    // PLYLoader 默认只认 xyz/法线/颜色，回波强度要显式登记才会保留
+    const loader = new PLYLoader();
+    loader.setCustomPropertyNameMapping({ intensity: ['intensity'] });
+    const geo = loader.parse(buf);
 
     if (head.isMesh) {
       const mesh = makeMesh(geo, { color: 0x93a09a });
@@ -179,6 +182,19 @@ export const plyLoader = {
     const colors = colorAttr ? new Float32Array(colorAttr.array) : null;
     if (colors && colors.length > pos.count * 3) colors.length = pos.count * 3;
     const points = makePoints(positions, colors, null);
-    return { object3d: points, kind: 'cloud', units: null };
+
+    const inten = geo.getAttribute('intensity');
+    let note;
+    if (inten && inten.count === pos.count) {
+      const src = inten.array;
+      const arr = new Float32Array(src.length);
+      for (let i = 0; i < src.length; i++) arr[i] = src[i];
+      points.userData.intensity = arr;
+      note = `${pos.count.toLocaleString('en-US')} 点 · 含强度${colors ? '与 RGB' : ''}`;
+    } else {
+      note = `${pos.count.toLocaleString('en-US')} 点`;
+    }
+
+    return { object3d: points, kind: 'cloud', units: null, note };
   },
 };

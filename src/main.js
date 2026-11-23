@@ -63,7 +63,7 @@ function centerCloud(object3d) {
   object3d.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(object3d);
   const center = box.getCenter(new THREE.Vector3());
-  if (!isFinite(center.x + center.y + center.z)) return box;
+  if (!isFinite(center.x + center.y + center.z)) return { box, center: new THREE.Vector3() };
 
   object3d.traverse((o) => {
     if (!o.isPoints || !o.geometry) return;
@@ -79,7 +79,7 @@ function centerCloud(object3d) {
     o.geometry.computeBoundingBox();
     o.geometry.computeBoundingSphere();
   });
-  return new THREE.Box3().setFromObject(object3d);
+  return { box: new THREE.Box3().setFromObject(object3d), center };
 }
 
 function normalize(result) {
@@ -93,7 +93,7 @@ function normalize(result) {
     const center = box.getCenter(new THREE.Vector3());
     object3d.position.sub(center);
     object3d.updateMatrixWorld(true);
-    return new THREE.Box3().setFromObject(object3d);
+    return { box: new THREE.Box3().setFromObject(object3d), center };
   }
 
   if (kind === 'cloud' || kind === 'both') {
@@ -105,13 +105,19 @@ function normalize(result) {
   const center = box.getCenter(new THREE.Vector3());
   object3d.position.sub(center);
   object3d.updateMatrixWorld(true);
-  return new THREE.Box3().setFromObject(object3d);
+  return { box: new THREE.Box3().setFromObject(object3d), center };
 }
 
 function makeDoc(result) {
-  const box = normalize(result);
+  const { box, center } = normalize(result);
   const pointBase = applyPointScale(result.object3d);
   const stats = viewer.statsOf(result.object3d);
+
+  let hasIntensity = false;
+  result.object3d.traverse((o) => {
+    if (o.isPoints && o.userData.intensity) hasIntensity = true;
+  });
+
   return {
     id: ++docSeq,
     name: result.fileName || '示例',
@@ -123,11 +129,13 @@ function makeDoc(result) {
     kind: result.kind,
     object3d: result.object3d,
     box,
+    center,
     stats,
+    hasIntensity,
     pointBase,
     view: null,
     prepared: false,
-    colorMode: result.kind === 'mesh' ? 'solid' : 'height',
+    colorMode: result.kind === 'mesh' || result.kind === 'trajectory' ? 'solid' : 'height',
   };
 }
 
@@ -148,7 +156,11 @@ function updateSpecimen(doc) {
 
   const isCloud = doc.kind === 'cloud' || doc.kind === 'both';
   ui.pointSize.disabled = !isCloud;
-  ui.pointsNote.textContent = isCloud ? '越大越接近实景，越小越省性能' : '当前是网格模型';
+  ui.pointsNote.textContent = isCloud
+    ? '越大越接近实景，越小越省性能'
+    : doc.kind === 'trajectory'
+      ? '轨迹站点固定大小'
+      : '当前是网格模型';
 }
 
 function esc(s) {
@@ -181,7 +193,12 @@ function activate(doc, opts = {}) {
   viewer.setAxes($('opt-axes').checked);
   viewer.setAutoRotate($('opt-spin').checked);
 
-  const mode = doc.view?.mode || (doc.kind === 'mesh' ? 'solid' : 'height');
+  const mode =
+    doc.view?.mode || (doc.kind === 'mesh' || doc.kind === 'trajectory' ? 'solid' : 'height');
+
+  const intenBtn = ui.seg.querySelector('[data-color="intensity"]');
+  if (intenBtn) intenBtn.hidden = !doc.hasIntensity;
+
   setSegActive(mode);
 
   const mult = doc.view?.size ?? 1;
@@ -239,7 +256,34 @@ async function openFiles(fileList) {
 
   // 连点两次会并发跑两轮，后面的把前面没跑完的丢掉
   const sid = ++session;
-  const groups = groupFiles(files);
+
+  const isPoses = (f) => f.name.toLowerCase().endsWith('.jsonl');
+  const poseFiles = files.filter(isPoses);
+  const otherFiles = files.filter((f) => !isPoses(f));
+  const groups = otherFiles.length ? groupFiles(otherFiles) : [];
+
+  // 轨迹先解析好，等主文件建完再叠上去（两边的世界坐标要共用一个原点）
+  let posesObject = null;
+  if (poseFiles.length) {
+    try {
+      const ctx = { manager: makeManager(poseFiles), renderer: viewer.renderer };
+      const r = await loadFiles([poseFiles[0]], ctx);
+      if (sid !== session) return;
+      if (!groups.length) {
+        // 只拖了一个轨迹文件
+        const doc = makeDoc({ ...r, fileName: poseFiles[0].name });
+        docs.push(doc);
+        activate(doc);
+        return;
+      }
+      posesObject = r.object3d;
+    } catch (err) {
+      console.error(err);
+      toast(`轨迹没读出来：${err.message}`, true);
+    }
+  }
+
+  let overlaid = false;
 
   for (const g of groups) {
     if (sid !== session) return;
@@ -261,6 +305,16 @@ async function openFiles(fileList) {
       if (sid !== session) return;
 
       const doc = makeDoc(result);
+
+      // 轨迹叠到第一个 Z 朝上的主文件上
+      if (posesObject && !overlaid && result.upAxis !== 'y') {
+        posesObject.position.set(-doc.center.x, -doc.center.y, -doc.center.z);
+        doc.object3d.add(posesObject);
+        doc.box = new THREE.Box3().setFromObject(doc.object3d);
+        doc.note = doc.note ? `${doc.note} · 轨迹已叠加` : '轨迹已叠加';
+        overlaid = true;
+      }
+
       docs.push(doc);
       while (docs.length > MAX_TABS) {
         const old = docs.shift();

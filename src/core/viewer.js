@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { heightRamp, classRamp, uniformColor, SOLID_CHROME, SOLID_MESH } from './colors.js';
+import { heightRamp, classRamp, intensityRamp, uniformColor, SOLID_CHROME, SOLID_MESH } from './colors.js';
 
 const DEG = Math.PI / 180;
 
@@ -221,7 +221,7 @@ export class Viewer {
     } else {
       this._frame();
       this._buildGrid();
-      this.setColorMode(doc.kind === 'mesh' ? 'solid' : 'height');
+      this.setColorMode(doc.kind === 'mesh' || doc.kind === 'trajectory' ? 'solid' : 'height');
       this.setPointSize(1);
     }
   }
@@ -377,7 +377,7 @@ export class Viewer {
   setPointSize(mult) {
     this._sizeMult = mult;
     this.contentGroup.traverse((o) => {
-      if (o.isPoints && o.material) {
+      if (o.isPoints && o.material && !o.userData.fixedColor) {
         const base = this._pointBase || 1;
         o.material.size = base * mult;
       }
@@ -400,6 +400,8 @@ export class Viewer {
     const yMax = box.max.z;
 
     this.contentGroup.traverse((o) => {
+      if (o.userData.fixedColor) return;
+
       if (o.isPoints) {
         const geo = o.geometry;
         const pos = geo.getAttribute('position');
@@ -419,6 +421,8 @@ export class Viewer {
 
         if (mode === 'class' && o.userData.classes) {
           classRamp(o.userData.classes, count, arr);
+        } else if (mode === 'intensity' && o.userData.intensity) {
+          intensityRamp(o.userData.intensity, count, arr);
         } else if (mode === 'rgb' && o.userData.colors) {
           arr.set(o.userData.colors);
         } else if (mode === 'solid') {

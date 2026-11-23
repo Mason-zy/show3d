@@ -6,9 +6,13 @@ import { plyLoader } from './ply.js';
 import { pcdLoader } from './pcd.js';
 import { lasLoader } from './las.js';
 import { xyzLoader } from './xyz.js';
+import { posesLoader } from './poses.js';
 import { extOf } from './util.js';
 
-const LOADERS = [gltfLoader, objLoader, stlLoader, fbxLoader, plyLoader, pcdLoader, lasLoader, xyzLoader];
+const LOADERS = [
+  gltfLoader, objLoader, stlLoader, fbxLoader,
+  plyLoader, pcdLoader, lasLoader, xyzLoader, posesLoader,
+];
 
 const EXT_MAP = new Map();
 for (const l of LOADERS) for (const e of l.exts) EXT_MAP.set(e, l);

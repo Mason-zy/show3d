@@ -13,16 +13,17 @@ npm run dev        # http://localhost:5178
 
 ## 支持格式
 
-| 类型 | 格式 | 说明 |
-|---|---|---|
-| 模型 | `.glb` `.gltf` | 支持 Draco、KTX2、Meshopt 压缩 |
-| 模型 | `.obj` (+ `.mtl` + 贴图) | 同批次一起拖进来即可 |
-| 模型 | `.stl` | 二进制与 ASCII |
-| 模型 | `.fbx` | 二进制与 ASCII |
-| 模型 / 点云 | `.ply` | 自动分辨网格、点云、高斯泼溅三种内容 |
-| 点云 | `.pcd` | ASCII / binary |
-| 点云 | `.las` `.laz` | LAS 1.2–1.4，点格式 0–10；LAZ 靠 WASM 解压 |
-| 点云 | `.xyz` `.txt` `.pts` `.csv` | `x y z [r g b]`，逗号或空格分隔 |
+| 格式 | 说明 |
+|---|---|
+| `.glb` `.gltf` | 支持 Draco、KTX2、Meshopt 压缩 |
+| `.obj` (+ `.mtl` + 贴图) | 同批次一起拖进来即可 |
+| `.stl` | 二进制与 ASCII |
+| `.fbx` | 二进制与 ASCII |
+| `.ply` | 自动分辨网格、点云、高斯泼溅三种内容；保留 `intensity` 属性 |
+| `.pcd` | ASCII / binary |
+| `.las` `.laz` | LAS 1.2–1.4，点格式 0–10；LAZ 靠 WASM 解压 |
+| `.xyz` `.txt` `.pts` `.csv` | `x y z [r g b]`，逗号或空格分隔 |
+| `.jsonl` | 扫描位姿轨迹：`sensor_pose.position` + `yaw_deg` / `pitch_deg` |
 
 明确不支持：`.blend`（浏览器无法可靠解析）、`.dwg`、`.max`、`.skp`、`.e57`。
 
@@ -30,7 +31,8 @@ npm run dev        # http://localhost:5178
 
 - 拖拽打开，可一次拖多个文件，每个文件一个标签页
 - 标签页切换不重新解析；每个标签记住自己的视角、着色和点大小
-- 着色：按高度色带 / 文件原色 / 分类色 / 单色
+- 把 `.ply` 和位姿 `.jsonl` 一起拖进来，轨迹会自动叠到点云上（共用同一个原点）
+- 着色：按高度色带 / 文件原色 / 分类色 / 强度灰度 / 单色（强度只在文件带 `intensity` 时出现）
 - 点大小调节，大量点时自动缩小
 - 视口左下角比例尺随缩放变化（LAS 系按米，其它格式只显示数值）
 - 底部读数条：光标坐标、点数、面数、帧率

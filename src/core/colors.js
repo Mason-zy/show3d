@@ -118,5 +118,78 @@ export function uniformColor(hex, count, target) {
   return out;
 }
 
+/**
+ * 回波强度 → 灰度。扫描仪的原生观感。
+ * 用直方图砍掉两头 0.5% 的极值，否则一个异常值就能把整个色阶压平。
+ */
+export function intensityRamp(values, count, target) {
+  const out = target || new Float32Array(count * 3);
+  if (!count) return out;
+
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let i = 0; i < count; i++) {
+    const v = values[i];
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  if (!isFinite(lo) || !(hi > lo)) {
+    const g = lin(0.45);
+    out.fill(0);
+    for (let i = 0; i < count; i++) {
+      out[i * 3] = g;
+      out[i * 3 + 1] = g;
+      out[i * 3 + 2] = g;
+    }
+    return out;
+  }
+
+  const BINS = 256;
+  const hist = new Uint32Array(BINS);
+  const span = hi - lo;
+  for (let i = 0; i < count; i++) {
+    let b = (((values[i] - lo) / span) * (BINS - 1)) | 0;
+    if (b < 0) b = 0;
+    else if (b > BINS - 1) b = BINS - 1;
+    hist[b]++;
+  }
+
+  let acc = 0;
+  let bLo = 0;
+  for (let b = 0; b < BINS; b++) {
+    acc += hist[b];
+    if (acc >= count * 0.005) {
+      bLo = b;
+      break;
+    }
+  }
+  acc = 0;
+  let bHi = BINS - 1;
+  for (let b = 0; b < BINS; b++) {
+    acc += hist[b];
+    if (acc >= count * 0.995) {
+      bHi = b;
+      break;
+    }
+  }
+  if (bHi <= bLo) {
+    bLo = 0;
+    bHi = BINS - 1;
+  }
+
+  const vLo = lo + (bLo / (BINS - 1)) * span;
+  const d = (lo + (bHi / (BINS - 1)) * span - vLo) || 1;
+
+  for (let i = 0; i < count; i++) {
+    let t = (values[i] - vLo) / d;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const g = lin(Math.sqrt(t)); // 提一点暗部
+    out[i * 3] = g;
+    out[i * 3 + 1] = g;
+    out[i * 3 + 2] = g;
+  }
+  return out;
+}
+
 export const SOLID_CHROME = 0x3f5668;
 export const SOLID_MESH = 0x7f919c;

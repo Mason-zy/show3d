@@ -79,6 +79,13 @@ button {
   border-bottom: 1px solid var(--line);
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
 .brand {
   display: flex;
   align-items: baseline;
@@ -155,6 +162,47 @@ button {
   display: grid;
   grid-template-columns: 288px minmax(0, 1fr);
   min-height: 0;
+  transition: grid-template-columns 0.22s ease;
+}
+
+/* 收起侧栏：整块让给视口 */
+.body.rail-hidden {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.body.rail-hidden .rail {
+  visibility: hidden;
+  border-right-color: transparent;
+}
+
+.icon-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 3px;
+  color: var(--ink-3);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.icon-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.icon-btn:hover {
+  background: var(--prussian-wash);
+  color: var(--prussian);
+}
+
+.icon-btn.is-off {
+  color: var(--ink);
+  background: var(--prussian-wash);
 }
 
 .rail {
@@ -890,6 +938,12 @@ input[type="range"]:disabled {
   .body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
+    transition: grid-template-rows 0.22s ease;
+  }
+
+  .body.rail-hidden {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 0;
   }
 
   .rail {

@@ -257,6 +257,7 @@ async function openFiles(fileList) {
 
     try {
       const result = await loadFiles(g.files, ctx);
+      hideToast();
       if (sid !== session) return;
 
       const doc = makeDoc(result);
@@ -268,6 +269,7 @@ async function openFiles(fileList) {
       activate(doc);
     } catch (err) {
       console.error(err);
+      hideToast();
       if (sid === session) toast(err?.message || `${main.name} 打不开`, true);
     } finally {
       ctx.manager?.disposeUrls?.();
@@ -305,6 +307,11 @@ function toast(msg, isError = false, sticky = false) {
   if (!sticky) {
     toastTimer = setTimeout(() => ui.toast.classList.remove('is-on'), isError ? 4200 : 2600);
   }
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  ui.toast.classList.remove('is-on');
 }
 
 function runScanline() {
@@ -366,6 +373,16 @@ ui.tabList.addEventListener('click', (e) => {
 });
 
 ui.tabAdd.addEventListener('click', () => ui.fileInput.click());
+
+/* 收起 / 展开侧栏，把整块让给视口 */
+$('btn-rail').addEventListener('click', () => {
+  const btn = $('btn-rail');
+  const hidden = $('body').classList.toggle('rail-hidden');
+  btn.classList.toggle('is-off', hidden);
+  btn.title = hidden ? '展开侧栏' : '收起侧栏';
+  btn.setAttribute('aria-label', btn.title);
+  btn.setAttribute('aria-expanded', String(!hidden));
+});
 
 $('btn-frame').addEventListener('click', () => viewer.frameContent());
 $('view').addEventListener('dblclick', () => viewer.frameContent());

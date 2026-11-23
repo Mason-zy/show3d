@@ -78,6 +78,7 @@ export const xyzLoader = {
       object3d: points,
       kind: 'cloud',
       units: null,
+      upAxis: 'z',
       note: `${count.toLocaleString('en-US')} 点 · ${cols} 列${hasColor ? ' · 含 RGB' : ''}`,
     };
   },

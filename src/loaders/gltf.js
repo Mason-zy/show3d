@@ -7,10 +7,14 @@ let draco = null;
 let ktx2 = null;
 let rendererRef = null;
 
+function asset(p) {
+  return new URL(p, document.baseURI).href;
+}
+
 function getDraco() {
   if (!draco) {
     draco = new DRACOLoader();
-    draco.setDecoderPath('/draco/');
+    draco.setDecoderPath(asset('draco/'));
     draco.setDecoderConfig({ type: 'wasm' });
   }
   return draco;
@@ -18,7 +22,7 @@ function getDraco() {
 
 function getKtx2(renderer) {
   if (!ktx2 && renderer) {
-    ktx2 = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(renderer);
+    ktx2 = new KTX2Loader().setTranscoderPath(asset('basis/')).detectSupport(renderer);
     rendererRef = renderer;
   }
   return ktx2;
@@ -51,6 +55,7 @@ export const gltfLoader = {
         object3d: scene,
         kind: hasPoints ? 'both' : 'mesh',
         units: 'm',
+        upAxis: 'y',
         animations: gltf.animations || [],
       };
     } finally {

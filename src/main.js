@@ -45,6 +45,7 @@ if (import.meta.env.DEV) {
 let current = null;
 let toastTimer = 0;
 let dragDepth = 0;
+let loadSeq = 0;
 
 /* ── 载入管线 ───────────────────────────────────────────── */
 
@@ -72,11 +73,23 @@ function centerCloud(object3d) {
 }
 
 function normalize(result) {
-  const { object3d, kind } = result;
-  if (kind === 'cloud' || kind === 'both') {
-    const box = centerCloud(object3d);
-    return box;
+  const { object3d, kind, upAxis = 'z' } = result;
+
+  // glTF / OBJ / FBX 是 Y 朝上，世界的其余部分是 Z 朝上，这里转一次。
+  if (upAxis === 'y') {
+    object3d.rotation.x += Math.PI / 2;
+    object3d.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(object3d);
+    const center = box.getCenter(new THREE.Vector3());
+    object3d.position.sub(center);
+    object3d.updateMatrixWorld(true);
+    return new THREE.Box3().setFromObject(object3d);
   }
+
+  if (kind === 'cloud' || kind === 'both') {
+    return centerCloud(object3d);
+  }
+
   object3d.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(object3d);
   const center = box.getCenter(new THREE.Vector3());
@@ -146,6 +159,9 @@ async function openFiles(fileList) {
   const files = [...fileList];
   if (!files.length) return;
 
+  // 连点两个文件时，先发起的那次可能后完成，用序号把过期结果丢掉
+  const seq = ++loadSeq;
+
   const main = files.find((f) => isSupported(f.name)) || files[0];
   const big = main && main.size > 24 * 1024 * 1024;
   const ctx = {
@@ -160,10 +176,11 @@ async function openFiles(fileList) {
 
   try {
     const result = await loadFiles(files, ctx);
+    if (seq !== loadSeq) return;
     applyResult(result);
   } catch (err) {
     console.error(err);
-    toast(err?.message || '这个文件打不开', true);
+    if (seq === loadSeq) toast(err?.message || '这个文件打不开', true);
   } finally {
     ctx.manager?.disposeUrls?.();
   }
@@ -171,7 +188,8 @@ async function openFiles(fileList) {
 
 async function openSample(name, label) {
   try {
-    const res = await fetch(`/samples/${name}`);
+    // 相对页面地址解析，保证挂在子路径下也能取到
+    const res = await fetch(new URL(`samples/${name}`, document.baseURI).href);
     if (!res.ok) throw new Error(`示例文件缺失：${name}`);
     const blob = await res.blob();
     await openFiles([new File([blob], name)]);

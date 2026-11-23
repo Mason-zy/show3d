@@ -30,8 +30,8 @@ const write = (name, data) => {
 function makeXyz() {
   const lines = [];
   for (let x = -12; x <= 12; x += 0.11) {
-    for (let z = -12; z <= 12; z += 0.11) {
-      const y = noise(x, z) + (rand() - 0.5) * 0.05;
+    for (let y = -12; y <= 12; y += 0.11) {
+      const z = noise(x, y) + (rand() - 0.5) * 0.05;
       lines.push(`${x.toFixed(3)} ${y.toFixed(3)} ${z.toFixed(3)}`);
     }
   }
@@ -41,18 +41,18 @@ function makeXyz() {
 /* ── 2. LAS 1.2 / 点格式 2（RGB） ─────────────────────────── */
 function makeLas() {
   const pts = [];
-  // 建筑立面 + 地面
-  for (let y = 0; y <= 9; y += 0.045) {
+  // 建筑立面 + 地面（Z 朝上）
+  for (let z = 0; z <= 9; z += 0.045) {
     for (let x = -6; x <= 6; x += 0.045) {
-      const z = 0.9 * Math.sin(x * 0.25) + (rand() - 0.5) * 0.012;
+      const y = 0.9 * Math.sin(x * 0.25) + (rand() - 0.5) * 0.012;
       pts.push([x, y, z, 176, 182, 178]);
     }
   }
   for (let x = -14; x <= 14; x += 0.09) {
-    for (let z = -9; z <= 9; z += 0.09) {
-      if (z > -1.2 && z < 1.4) continue;
-      const y = noise(x * 0.6, z * 0.6) * 0.25;
-      pts.push([x, y, z + 2.2, 128, 140, 132]);
+    for (let y = -9; y <= 9; y += 0.09) {
+      if (y > -1.2 && y < 1.4) continue;
+      const z = noise(x * 0.6, y * 0.6) * 0.25;
+      pts.push([x, y, z, 128, 140, 132]);
     }
   }
 
@@ -117,10 +117,10 @@ function makeLas() {
 function makePlyCloud() {
   const rows = [];
   for (let x = -13; x <= 13; x += 0.1) {
-    for (let z = -13; z <= 13; z += 0.1) {
-      const d = Math.hypot(x, z);
-      const y = Math.sin(d * 0.55) * 1.6 + noise(x * 0.4, z * 0.4) * 0.35 + (rand() - 0.5) * 0.03;
-      const t = Math.min(1, Math.max(0, (y + 2) / 4));
+    for (let y = -13; y <= 13; y += 0.1) {
+      const d = Math.hypot(x, y);
+      const z = Math.sin(d * 0.55) * 1.6 + noise(x * 0.4, y * 0.4) * 0.35 + (rand() - 0.5) * 0.03;
+      const t = Math.min(1, Math.max(0, (z + 2) / 4));
       const r = Math.round(70 + t * 160);
       const g = Math.round(110 + t * 110);
       const b = Math.round(150 - t * 60);
@@ -152,8 +152,8 @@ function makePlyMesh() {
   for (let i = 0; i <= N; i++) {
     for (let j = 0; j <= N; j++) {
       const x = (i / N - 0.5) * 10;
-      const z = (j / N - 0.5) * 10;
-      const y = Math.sin(x * 0.9) * Math.cos(z * 0.8) * 0.9;
+      const y = (j / N - 0.5) * 10;
+      const z = Math.sin(x * 0.9) * Math.cos(y * 0.8) * 0.9;
       verts.push([x, y, z]);
     }
   }
@@ -201,8 +201,8 @@ function makePcd() {
     const curve = Math.sin(along * 0.12) * 4;
     for (let w = -3.2; w <= 3.2; w += 0.05) {
       const x = along;
-      const z = curve + w;
-      const y = Math.sin(along * 0.3) * 0.08 + (rand() - 0.5) * 0.02;
+      const y = curve + w;
+      const z = Math.sin(along * 0.3) * 0.08 + (rand() - 0.5) * 0.02;
       const shade = w > 0.2 ? 1 : 0.72;
       const r = Math.round(210 * shade);
       const g = Math.round(208 * shade);
@@ -311,7 +311,7 @@ function makeGlb() {
     scene: 0,
     scenes: [{ nodes: [0] }],
     nodes: [{ mesh: 0, name: 'pavilion' }],
-    meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2, material: 0 }] }],
     materials: [
       {
         pbrMetallicRoughness: {
@@ -401,11 +401,11 @@ function makeStl() {
     const a = (i / seg) * Math.PI * 2;
     const b = (j / ringSeg) * Math.PI * 2;
     const cx = Math.cos(a) * R;
-    const cz = Math.sin(a) * R;
+    const cy = Math.sin(a) * R;
     return [
       cx + Math.cos(a) * Math.cos(b) * r,
+      cy + Math.sin(a) * Math.cos(b) * r,
       Math.sin(b) * r,
-      cz + Math.sin(a) * Math.cos(b) * r,
     ];
   };
   for (let i = 0; i < seg; i++) {

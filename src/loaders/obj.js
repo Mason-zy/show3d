@@ -41,6 +41,6 @@ export const objLoader = {
     });
 
     if (!group.children.length) throw new Error('OBJ 里没有找到几何体');
-    return { object3d: group, kind: hasPoints ? 'both' : 'mesh', units: null, sourceName: baseOf(main.name) };
+    return { object3d: group, kind: hasPoints ? 'both' : 'mesh', units: null, upAxis: 'y', sourceName: baseOf(main.name) };
   },
 };

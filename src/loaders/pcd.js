@@ -23,6 +23,7 @@ export const pcdLoader = {
       object3d: points,
       kind: 'cloud',
       units: null,
+      upAxis: 'z',
       note: `${pos.count.toLocaleString('en-US')} 点`,
     };
   },

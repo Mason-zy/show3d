@@ -14,6 +14,6 @@ export const stlLoader = {
     geo.computeVertexNormals();
     const mesh = makeMesh(geo, { flat: true, color: 0x95a29b });
     mesh.material.roughness = 0.85;
-    return { object3d: mesh, kind: 'mesh', units: null };
+    return { object3d: mesh, kind: 'mesh', units: null, upAxis: 'z' };
   },
 };

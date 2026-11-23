@@ -68,28 +68,38 @@ python tools/make-laz.py         # 生成 scan.laz，需要 pip install laspy la
 
 ## 技术备注
 
+- **世界坐标是 Z 轴朝上**（测绘惯例）。LAS/LAZ/PCD/XYZ/PLY/STL 直接按原坐标显示，
+  底部读数就是文件里的真实坐标；glTF/OBJ/FBX 是 Y 朝上的，导入时转 90°。
 - 顶点色按线性空间写入（three 的颜色管理），否则点云会整体发白。
 - 网格材质用 `DoubleSide`：第三方导出的文件绕序经常不一致，靠背面剔除会丢面。
+- 场景带一张程序生成的反射环境贴图：glTF 的金属材质没有环境就是一团黑。
 - `laz-perf` 的 `LASZip.open()` 必须传入**完整 LAZ 文件**，只给点数据段会抛 C++ 异常。
 
 ## 部署
 
-静态站点，`dist/` 扔到任何 nginx 后面就能跑。
+已上线：**https://kit-server.tailb014af.ts.net/show3d/**
 
-`tools/deploy-gx.sh` 是本机到 `gx` 的发布脚本（构建 → 打包 → scp → 解包 → 自检）：
+静态站点，构建产物用相对路径，放域名根或子路径都能跑。
 
 ```bash
-bash tools/deploy-gx.sh
+bash tools/deploy-gx.sh      # 构建 → 打包 → scp → 解包 → 自检
 ```
 
-gx 上的容器是这样起的，文件挂载进去，更新内容不需要重启：
+gx 上的容器（文件挂载，更新内容不用重启）：
 
 ```bash
 docker run -d --name show3d --restart unless-stopped \
   -p 172.17.0.1:18080:80 \
-  -v /data/home/kit/Project/show3d:/usr/share/nginx/html:ro \
+  -v /data/home/kit/Project/show3d/html:/usr/share/nginx/html:ro \
+  -v /data/home/kit/Project/show3d/nginx.conf:/etc/nginx/conf.d/default.conf:ro \
   nginx:1.27-alpine
 ```
 
-只绑定 docker 网桥地址，公网 IP 直连不可达；对外由 Cloudflare Tunnel
-把域名转发到 `http://172.17.0.1:18080`。
+只绑定 docker 网桥地址，公网 IP 直连不可达。对外走 Tailscale Funnel：
+
+```bash
+docker exec kit-tailscale tailscale funnel --bg \
+  --set-path=/show3d http://172.17.0.1:18080/show3d
+```
+
+注意 Funnel **会剥掉挂载前缀**，所以目标 URL 里要再写一遍 `/show3d`。

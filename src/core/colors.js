@@ -79,13 +79,14 @@ export function classColor(id) {
 
 /**
  * 按高度生成顶点色，返回 Float32Array（rgb, rgb, …）
+ * 世界坐标是 Z 朝上，所以高度取 z 分量。
  */
-export function heightRamp(positions, count, yMin, yMax, target) {
+export function heightRamp(positions, count, zMin, zMax, target) {
   const out = target || new Float32Array(count * 3);
   const tmp = [0, 0, 0];
-  const span = yMax - yMin || 1;
+  const span = zMax - zMin || 1;
   for (let i = 0; i < count; i++) {
-    rampColor((positions[i * 3 + 1] - yMin) / span, tmp);
+    rampColor((positions[i * 3 + 2] - zMin) / span, tmp);
     out[i * 3] = tmp[0];
     out[i * 3 + 1] = tmp[1];
     out[i * 3 + 2] = tmp[2];

@@ -181,6 +181,7 @@ export const lasLoader = {
       object3d: points,
       kind: 'cloud',
       units: 'm',
+      upAxis: 'z',
       note: `LAS ${header.version} · 格式 ${header.pointFormat} · ${decoded.count.toLocaleString('en-US')} 点`,
     };
   },

@@ -1,8 +1,14 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { heightRamp, classRamp, uniformColor, SOLID_CHROME, SOLID_MESH } from './colors.js';
 
 const DEG = Math.PI / 180;
+
+// 测绘/点云数据是 Z 轴朝上，整个世界坐标系按 Z 上走，
+// 底部读数才能和文件里的坐标对得上。
+const WORLD_UP = new THREE.Vector3(0, 0, 1);
+THREE.Object3D.DEFAULT_UP.copy(WORLD_UP);
 
 function niceNumber(v) {
   if (!isFinite(v) || v <= 0) return 1;
@@ -45,7 +51,8 @@ export class Viewer {
     this.scene = new THREE.Scene();
 
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.01, 5000);
-    this.camera.position.set(14, 11, 17);
+    this.camera.up.copy(WORLD_UP);
+    this.camera.position.set(14, -16, 12);
 
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -57,13 +64,19 @@ export class Viewer {
     this.controls.minDistance = 0.001;
     this.controls.maxDistance = 1e7;
 
+    // 环境反射：glTF 的金属材质没有环境贴图就是一团黑，
+    // 用程序生成一个室内环境当反射源，顺带让塑料/金属都有正常的形体。
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.05).texture;
+    this.scene.environmentIntensity = 0.6;
+
     // 光照：半球打底 + 一盏侧上光，浅色场景里靠这个撑形体
-    const hemi = new THREE.HemisphereLight(0xffffff, 0xa3b0aa, 2.15);
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xa3b0aa, 1.25);
     this.scene.add(hemi);
-    const key = new THREE.DirectionalLight(0xffffff, 1.75);
-    key.position.set(9, 16, 7);
+    const key = new THREE.DirectionalLight(0xffffff, 1.25);
+    key.position.set(9, -16, 12);
     this.scene.add(key);
-    const fill = new THREE.DirectionalLight(0xdfe9f2, 0.55);
+    const fill = new THREE.DirectionalLight(0xdfe9f2, 0.4);
     fill.position.set(-10, 6, -8);
     this.scene.add(fill);
 
@@ -218,13 +231,12 @@ export class Viewer {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() / 2, 1e-6);
-    const dir = new THREE.Vector3(0.62, 0.52, 0.86).normalize();
+    const dir = new THREE.Vector3(0.62, -0.72, 0.58).normalize();
 
     // 把包围盒 8 个角投到相机平面上，按真实的横向/纵向张角取距离，
     // 否则扁平点云会被包围球算得过远，缩成一条带子。
     const fwd = dir.clone().negate();
-    const upRef = Math.abs(fwd.y) > 0.95 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(fwd, upRef).normalize();
+    const right = new THREE.Vector3().crossVectors(fwd, WORLD_UP).normalize();
     const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
 
     const { min, max } = box;
@@ -270,10 +282,12 @@ export class Viewer {
     const grid = new THREE.GridHelper(span, divisions, 0xa9b5af, 0xc2ccc7);
     grid.material.transparent = true;
     grid.material.opacity = 0.9;
+    // GridHelper 默认铺在 XZ 平面，Z 上坐标系要转到 XY 平面
+    grid.rotation.x = Math.PI / 2;
     grid.position.set(
       (box.min.x + box.max.x) / 2,
-      box.min.y,
-      (box.min.z + box.max.z) / 2
+      (box.min.y + box.max.y) / 2,
+      box.min.z
     );
     this.gridGroup.add(grid);
 
@@ -326,8 +340,8 @@ export class Viewer {
     if (!this.content) return;
     this.content.colorMode = mode;
     const box = this.content.bbox;
-    const yMin = box.min.y;
-    const yMax = box.max.y;
+    const yMin = box.min.z;
+    const yMax = box.max.z;
 
     this.contentGroup.traverse((o) => {
       if (o.isPoints) {

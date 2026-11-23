@@ -18,6 +18,6 @@ export const fbxLoader = {
         }
       }
     });
-    return { object3d: group, kind: 'mesh', units: null };
+    return { object3d: group, kind: 'mesh', units: null, upAxis: 'y' };
   },
 };

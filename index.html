@@ -94,23 +94,30 @@
         </aside>
 
         <main class="stage" id="stage">
-          <canvas id="view"></canvas>
+          <div class="tabs" id="tabs" hidden>
+            <div class="tab-list" id="tab-list"></div>
+            <button class="tab-add" id="tab-add" title="打开文件" aria-label="打开文件">＋</button>
+          </div>
 
-          <div class="empty" id="empty">
-            <div class="empty-inner">
-              <p class="empty-line">把文件拖到这里</p>
-              <p class="empty-sub">GLB、OBJ、STL、PLY、PCD、LAS、LAZ、XYZ、TXT 都可以直接打开</p>
+          <div class="viewport" id="viewport">
+            <canvas id="view"></canvas>
+
+            <div class="empty" id="empty">
+              <div class="empty-inner">
+                <p class="empty-line">把文件拖到这里</p>
+                <p class="empty-sub">GLB、OBJ、STL、PLY、PCD、LAS、LAZ、XYZ、TXT 都可以直接打开，一次可以拖多个</p>
+              </div>
             </div>
+
+            <div class="scalebar" id="scalebar" aria-hidden="true">
+              <div class="scalebar-rule"><i></i><i></i></div>
+              <span class="scalebar-label" id="scalebar-label">1 m</span>
+            </div>
+
+            <div class="drop-veil" id="drop-veil"><span>松手打开</span></div>
+
+            <div class="toast" id="toast" role="status" aria-live="polite"></div>
           </div>
-
-          <div class="scalebar" id="scalebar" aria-hidden="true">
-            <div class="scalebar-rule"><i></i><i></i></div>
-            <span class="scalebar-label" id="scalebar-label">1 m</span>
-          </div>
-
-          <div class="drop-veil" id="drop-veil"><span>松手打开</span></div>
-
-          <div class="toast" id="toast" role="status" aria-live="polite"></div>
         </main>
       </div>
 

@@ -9,6 +9,10 @@ const $ = (id) => document.getElementById(id);
 
 const ui = {
   stage: $('stage'),
+  viewport: $('viewport'),
+  tabs: $('tabs'),
+  tabList: $('tab-list'),
+  tabAdd: $('tab-add'),
   empty: $('empty'),
   veil: $('drop-veil'),
   toast: $('toast'),
@@ -45,7 +49,13 @@ if (import.meta.env.DEV) {
 let current = null;
 let toastTimer = 0;
 let dragDepth = 0;
-let loadSeq = 0;
+let session = 0;
+
+const docs = [];
+let demoDoc = null;
+let active = null;
+let docSeq = 0;
+const MAX_TABS = 8;
 
 /* ── 载入管线 ───────────────────────────────────────────── */
 
@@ -98,91 +108,170 @@ function normalize(result) {
   return new THREE.Box3().setFromObject(object3d);
 }
 
-function applyResult(result, opts = {}) {
-  clearTimeout(toastTimer);
-  ui.toast.classList.remove('is-on');
-
+function makeDoc(result) {
   const box = normalize(result);
-  applyPointScale(result.object3d);
-
+  const pointBase = applyPointScale(result.object3d);
   const stats = viewer.statsOf(result.object3d);
-  const size = box.getSize(new THREE.Vector3());
-
-  viewer.setContent({
-    object3d: result.object3d,
-    bbox: box,
-    stats,
+  return {
+    id: ++docSeq,
+    name: result.fileName || '示例',
+    formatLabel: result.formatLabel || '示例',
+    fileSize: result.fileSize || 0,
+    elapsed: result.elapsed || 0,
+    note: result.note,
     units: result.units || null,
     kind: result.kind,
-  });
-  viewer.setPointSize(parseFloat(ui.pointSize.value) / 1.4);
+    object3d: result.object3d,
+    box,
+    stats,
+    pointBase,
+    view: null,
+    prepared: false,
+    colorMode: result.kind === 'mesh' ? 'solid' : 'height',
+  };
+}
+
+function updateSpecimen(doc) {
+  const size = doc.box.getSize(new THREE.Vector3());
+  ui.specFormat.textContent = doc.formatLabel;
+  ui.specFormat.classList.add('is-active');
+  ui.specName.textContent = doc.name;
+  ui.specName.classList.remove('is-empty');
+  ui.specSize.textContent = doc.fileSize ? formatBytes(doc.fileSize) : '';
+  ui.specPoints.textContent = doc.stats.points ? fmtNum(doc.stats.points) : '—';
+  ui.specTris.textContent = doc.stats.triangles ? fmtNum(doc.stats.triangles) : '—';
+  ui.specDims.textContent = `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)}`;
+  ui.specTime.textContent = doc.elapsed ? `${Math.round(doc.elapsed)} ms` : '—';
+
+  ui.roPoints.textContent = fmtNum(doc.stats.points);
+  ui.roTris.textContent = fmtNum(doc.stats.triangles);
+
+  const isCloud = doc.kind === 'cloud' || doc.kind === 'both';
+  ui.pointSize.disabled = !isCloud;
+  ui.pointsNote.textContent = isCloud ? '越大越接近实景，越小越省性能' : '当前是网格模型';
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function renderTabs() {
+  ui.tabs.hidden = docs.length === 0;
+  ui.tabList.innerHTML = docs
+    .map(
+      (d) => `<div class="tab${d === active ? ' is-on' : ''}" data-id="${d.id}">
+        <button class="tab-main" data-id="${d.id}" title="${esc(d.name)}">
+          <span class="tab-name">${esc(d.name)}</span>
+        </button>
+        <button class="tab-x" data-close="${d.id}" title="关闭">×</button>
+      </div>`
+    )
+    .join('');
+}
+
+function activate(doc, opts = {}) {
+  if (!doc) return;
+  active = doc;
+  current = doc;
+
+  viewer.show(doc);
   viewer.setGrid($('opt-grid').checked);
   viewer.setAxes($('opt-axes').checked);
   viewer.setAutoRotate($('opt-spin').checked);
 
-  const defaultMode = result.kind === 'mesh' ? 'solid' : 'height';
-  setSegActive(defaultMode);
-  viewer.setColorMode(defaultMode);
+  const mode = doc.view?.mode || (doc.kind === 'mesh' ? 'solid' : 'height');
+  setSegActive(mode);
 
-  current = { ...result, box, stats };
+  const mult = doc.view?.size ?? 1;
+  ui.pointSize.value = (mult * 1.4).toFixed(1);
+  ui.pointSizeV.textContent = (mult * 1.4).toFixed(1);
 
-  // 标本标签
-  ui.specFormat.textContent = result.formatLabel || '文件';
-  ui.specFormat.classList.add('is-active');
-  ui.specName.textContent = result.fileName || '示例';
-  ui.specName.classList.remove('is-empty');
-  ui.specSize.textContent = result.fileSize ? formatBytes(result.fileSize) : '';
-  ui.specPoints.textContent = stats.points ? fmtNum(stats.points) : '—';
-  ui.specTris.textContent = stats.triangles ? fmtNum(stats.triangles) : '—';
-  ui.specDims.textContent = `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)}`;
-  ui.specTime.textContent = result.elapsed ? `${Math.round(result.elapsed)} ms` : '—';
+  updateSpecimen(doc);
+  renderTabs();
 
-  ui.roPoints.textContent = fmtNum(stats.points);
-  ui.roTris.textContent = fmtNum(stats.triangles);
-
-  const isCloud = result.kind === 'cloud' || result.kind === 'both';
-  ui.pointSize.disabled = !isCloud;
-  ui.pointsNote.textContent = isCloud ? '越大越接近实景，越小越省性能' : '当前是网格模型';
-
-  ui.empty.classList.toggle('is-hidden', !opts.keepEmpty);
+  ui.empty.classList.toggle('is-hidden', docs.length > 0);
   ui.scalebar.classList.add('is-on');
 
   if (!opts.silent) {
     runScanline();
     viewer.playReveal();
+    if (doc.note) toast(doc.note);
   }
+}
 
-  if (result.note && !opts.silent) toast(result.note);
+function closeDoc(id) {
+  const i = docs.findIndex((d) => d.id === id);
+  if (i < 0) return;
+  const [doc] = docs.splice(i, 1);
+  const wasActive = active === doc;
+  viewer.removeDoc(doc);
+
+  if (wasActive) {
+    const next = docs[i] || docs[i - 1] || demoDoc;
+    activate(next, { silent: true });
+  } else {
+    renderTabs();
+  }
+}
+
+/** 一次拖进来的文件可能分属不同文档；贴图/MTL 归到同名主文件 */
+function groupFiles(files) {
+  const mains = files.filter((f) => isSupported(f.name));
+  if (!mains.length) return [{ files }];
+
+  const stemOf = (n) => n.replace(/\.[^.]+$/, '').toLowerCase();
+  const groups = mains.map((f) => ({ main: f, files: [f] }));
+
+  for (const f of files) {
+    if (isSupported(f.name)) continue;
+    let g = groups.find((x) => stemOf(x.main.name) === stemOf(f.name));
+    if (!g && groups.length === 1) g = groups[0];
+    if (g) g.files.push(f);
+  }
+  return groups;
 }
 
 async function openFiles(fileList) {
   const files = [...fileList];
   if (!files.length) return;
 
-  // 连点两个文件时，先发起的那次可能后完成，用序号把过期结果丢掉
-  const seq = ++loadSeq;
+  // 连点两次会并发跑两轮，后面的把前面没跑完的丢掉
+  const sid = ++session;
+  const groups = groupFiles(files);
 
-  const main = files.find((f) => isSupported(f.name)) || files[0];
-  const big = main && main.size > 24 * 1024 * 1024;
-  const ctx = {
-    manager: makeManager(files),
-    renderer: viewer.renderer,
-    onProgress: (p, label) => {
-      if (big) toast(`${label} ${Math.round(p * 100)}% · ${main.name}`, false, true);
-    },
-  };
+  for (const g of groups) {
+    if (sid !== session) return;
+    const main = g.main || g.files.find((f) => isSupported(f.name)) || g.files[0];
+    const big = main.size > 24 * 1024 * 1024;
+    const ctx = {
+      manager: makeManager(g.files),
+      renderer: viewer.renderer,
+      onProgress: (p, label) => {
+        if (big) toast(`${label} ${Math.round(p * 100)}% · ${main.name}`, false, true);
+      },
+    };
 
-  if (big) toast(`正在读取 ${main.name}（${formatBytes(main.size)}）…`, false, true);
+    if (big) toast(`正在读取 ${main.name}（${formatBytes(main.size)}）…`, false, true);
 
-  try {
-    const result = await loadFiles(files, ctx);
-    if (seq !== loadSeq) return;
-    applyResult(result);
-  } catch (err) {
-    console.error(err);
-    if (seq === loadSeq) toast(err?.message || '这个文件打不开', true);
-  } finally {
-    ctx.manager?.disposeUrls?.();
+    try {
+      const result = await loadFiles(g.files, ctx);
+      if (sid !== session) return;
+
+      const doc = makeDoc(result);
+      docs.push(doc);
+      while (docs.length > MAX_TABS) {
+        const old = docs.shift();
+        if (old !== doc) viewer.removeDoc(old);
+      }
+      activate(doc);
+    } catch (err) {
+      console.error(err);
+      if (sid === session) toast(err?.message || `${main.name} 打不开`, true);
+    } finally {
+      ctx.manager?.disposeUrls?.();
+    }
   }
 }
 
@@ -223,7 +312,7 @@ function runScanline() {
   if (!el) {
     el = document.createElement('div');
     el.className = 'scanline';
-    ui.stage.appendChild(el);
+    (ui.viewport || ui.stage).appendChild(el);
   }
   el.classList.remove('is-run');
   void el.offsetWidth;
@@ -258,10 +347,25 @@ ui.fileInput.addEventListener('change', (e) => {
 });
 
 $('btn-shot').addEventListener('click', () => {
-  const base = (current?.fileName || 'show3d').replace(/\.[^.]+$/, '');
+  const base = (current?.name || 'show3d').replace(/\.[^.]+$/, '');
   viewer.screenshot(`${base}.png`);
   toast('已保存截图');
 });
+
+/* 标签栏 */
+ui.tabList.addEventListener('click', (e) => {
+  const closer = e.target.closest('[data-close]');
+  if (closer) {
+    closeDoc(Number(closer.dataset.close));
+    return;
+  }
+  const hit = e.target.closest('[data-id]');
+  if (!hit) return;
+  const doc = docs.find((d) => d.id === Number(hit.dataset.id));
+  if (doc && doc !== active) activate(doc, { silent: true });
+});
+
+ui.tabAdd.addEventListener('click', () => ui.fileInput.click());
 
 $('btn-frame').addEventListener('click', () => viewer.frameContent());
 $('view').addEventListener('dblclick', () => viewer.frameContent());
@@ -367,11 +471,9 @@ ui.samples.addEventListener('click', (e) => {
 });
 
 /* 开场：先摆一块场地，别让用户对着空盒子 */
-const demo = buildDemoSite();
-applyResult(
-  { ...demo, formatLabel: '示例', fileName: '示例场地', elapsed: 0 },
-  { keepEmpty: true, silent: true }
-);
+demoDoc = makeDoc({ ...buildDemoSite(), formatLabel: '示例', fileName: '示例场地', elapsed: 0 });
+activate(demoDoc, { silent: true });
+ui.empty.classList.remove('is-hidden');
 
 // 首屏给一次显影
 setTimeout(() => viewer.playReveal(), 160);

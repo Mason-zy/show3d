@@ -467,9 +467,143 @@ input[type="range"]:disabled {
 .stage {
   position: relative;
   min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   background:
     radial-gradient(120% 90% at 50% 8%, var(--stage-hi) 0%, var(--stage) 62%, #dde3e0 100%);
+}
+
+.viewport {
+  position: relative;
+  min-height: 0;
+}
+
+/* 标签栏：多个文件并排，像标本柜里的抽屉 */
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding-left: 8px;
+  overflow: hidden;
+}
+
+.tabs[hidden] {
+  display: none;
+}
+
+.tab-list {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  max-width: 230px;
+  border-right: 1px solid var(--line-soft);
+  transition: background 0.15s ease;
+}
+
+.tab:first-child {
+  border-left: 1px solid var(--line-soft);
+}
+
+.tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1.5px;
+  background: transparent;
+  transition: background 0.18s ease;
+}
+
+.tab:hover {
+  background: var(--prussian-wash);
+}
+
+.tab.is-on {
+  background: var(--stage-hi);
+}
+
+.tab.is-on::after {
+  background: var(--prussian);
+}
+
+.tab-main {
+  min-width: 0;
+  max-width: 186px;
+  padding: 9px 2px 8px 12px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.tab:hover .tab-main {
+  color: var(--ink);
+}
+
+.tab.is-on .tab-main {
+  color: var(--prussian);
+  font-weight: 500;
+}
+
+.tab-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-x {
+  flex: none;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  color: var(--ink-3);
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.tab:hover .tab-x,
+.tab.is-on .tab-x {
+  opacity: 1;
+}
+
+.tab-x:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.tab-add {
+  flex: none;
+  padding: 0 12px;
+  color: var(--ink-3);
+  font-size: 15px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.tab-add:hover {
+  color: var(--prussian);
+  background: var(--prussian-wash);
 }
 
 #view {

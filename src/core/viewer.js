@@ -189,25 +189,80 @@ export class Viewer {
     this.onScale({ len, px, unit: this.content?.units || null });
   }
 
-  /** 载入内容：object3d + 元信息 */
-  setContent({ object3d, bbox, stats, units, kind }) {
-    this.clear();
+  /**
+   * 切换到一个文档。上一个文档只是从场景里摘下来，不销毁，
+   * 所以来回切标签不用重新解析；每个文档还记得自己的相机和着色。
+   */
+  show(doc) {
+    if (this.content && this.content !== doc) this._saveView(this.content);
 
-    this.content = {
-      object3d,
-      bbox: bbox || new THREE.Box3().setFromObject(object3d),
-      stats: stats || { points: 0, triangles: 0 },
-      units: units || null,
-      kind,
-      colorMode: 'height',
-      solidApplied: kind === 'mesh' || kind === 'both' ? 'solid' : 'height',
+    if (this.content && this.content.object3d.parent === this.contentGroup) {
+      this.contentGroup.remove(this.content.object3d);
+    }
+
+    this.content = doc;
+    this.contentGroup.add(doc.object3d);
+
+    if (!doc.prepared) {
+      this._prepareMaterials(doc.object3d);
+      doc.prepared = true;
+    }
+
+    this._pointBase = doc.pointBase || 0;
+
+    if (doc.view) {
+      this.camera.position.copy(doc.view.pos);
+      this.controls.target.copy(doc.view.target);
+      this._updateClip();
+      this.controls.update();
+      this._buildGrid();
+      this.setColorMode(doc.view.mode);
+      this.setPointSize(doc.view.size);
+    } else {
+      this._frame();
+      this._buildGrid();
+      this.setColorMode(doc.kind === 'mesh' ? 'solid' : 'height');
+      this.setPointSize(1);
+    }
+  }
+
+  _saveView(doc) {
+    doc.view = {
+      pos: this.camera.position.clone(),
+      target: this.controls.target.clone(),
+      mode: doc.colorMode || 'height',
+      size: this._sizeMult || 1,
     };
-    this.contentGroup.add(object3d);
+  }
 
-    this._prepareMaterials(object3d);
-    this._frame();
-    this._buildGrid();
-    this.setColorMode(this.content.kind === 'mesh' ? 'solid' : 'height');
+  _updateClip() {
+    const dist = this.camera.position.distanceTo(this.controls.target);
+    const radius = Math.max(dist, 1e-4);
+    this.camera.near = Math.max(dist * 0.002, 1e-5);
+    this.camera.far = dist * 60 + radius * 6;
+    this.camera.updateProjectionMatrix();
+    this.controls.minDistance = Math.max(dist * 0.002, 1e-5);
+    this.controls.maxDistance = dist * 30;
+  }
+
+  /** 关掉一个文档并释放显存 */
+  removeDoc(doc) {
+    if (!doc) return;
+    if (this.content === doc) {
+      this.contentGroup.remove(doc.object3d);
+      this.content = null;
+    }
+    this._disposeObject(doc.object3d);
+  }
+
+  /** 清空当前视图（不销毁文档，文档由调用方管理） */
+  detach() {
+    if (this.content && this.content.object3d.parent === this.contentGroup) {
+      this.contentGroup.remove(this.content.object3d);
+    }
+    this.content = null;
+    this.gridGroup.clear();
+    this.axesGroup = null;
   }
 
   _prepareMaterials(root) {
@@ -227,7 +282,7 @@ export class Viewer {
   }
 
   _frame() {
-    const box = this.content.bbox;
+    const box = this.content.box;
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() / 2, 1e-6);
@@ -270,7 +325,7 @@ export class Viewer {
 
   _buildGrid() {
     this.gridGroup.clear();
-    const box = this.content?.bbox;
+    const box = this.content?.box;
     if (!box || box.isEmpty()) return;
 
     const size = box.getSize(new THREE.Vector3());
@@ -320,6 +375,7 @@ export class Viewer {
   }
 
   setPointSize(mult) {
+    this._sizeMult = mult;
     this.contentGroup.traverse((o) => {
       if (o.isPoints && o.material) {
         const base = this._pointBase || 1;
@@ -339,7 +395,7 @@ export class Viewer {
   setColorMode(mode) {
     if (!this.content) return;
     this.content.colorMode = mode;
-    const box = this.content.bbox;
+    const box = this.content.box;
     const yMin = box.min.z;
     const yMax = box.max.z;
 
@@ -413,15 +469,6 @@ export class Viewer {
   frameContent() {
     if (!this.content) return;
     this._frame();
-  }
-
-  clear() {
-    if (this.content) this._disposeObject(this.content.object3d);
-    this.contentGroup.clear();
-    this.gridGroup.clear();
-    this.content = null;
-    this._pointBase = 0;
-    this.axesGroup = null;
   }
 
   _disposeObject(root) {

@@ -68,6 +68,9 @@ function decodeRecords(bytes, header, count, pointLength) {
 
   const positions = new Float32Array(count * 3);
   const classes = new Uint8Array(count);
+  const intensity = new Uint16Array(count);
+  let iLo = 65535;
+  let iHi = 0;
   let colors = lay.rgb >= 0 ? new Float32Array(count * 3) : null;
   let rMax = 0;
 
@@ -77,6 +80,11 @@ function decodeRecords(bytes, header, count, pointLength) {
     positions[i * 3 + 1] = dv.getInt32(o + 4, true) * sy + oy;
     positions[i * 3 + 2] = dv.getInt32(o + 8, true) * sz + oz;
     classes[i] = dv.getUint8(o + lay.cls);
+
+    const it = dv.getUint16(o + 12, true);
+    intensity[i] = it;
+    if (it < iLo) iLo = it;
+    if (it > iHi) iHi = it;
 
     if (colors) {
       const r = dv.getUint16(o + lay.rgb, true);
@@ -96,7 +104,9 @@ function decodeRecords(bytes, header, count, pointLength) {
     for (let i = 0; i < colors.length; i++) colors[i] *= norm;
   }
 
-  return { positions, colors, classes, count };
+  // 全 0 或恒定值给不出灰度层次，就当没有
+  const hasIntensity = iHi > iLo;
+  return { positions, colors, classes, intensity: hasIntensity ? intensity : null, count };
 }
 
 let lazPerfModule = null;
@@ -177,6 +187,7 @@ export const lasLoader = {
     if (!decoded.count) throw new Error('LAS 文件里没有点');
 
     const points = makePoints(decoded.positions, decoded.colors, decoded.classes);
+    if (decoded.intensity) points.userData.intensity = decoded.intensity;
     return {
       object3d: points,
       kind: 'cloud',

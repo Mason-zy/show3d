@@ -191,9 +191,18 @@ export const plyLoader = {
     if (inten && inten.count === pos.count) {
       const src = inten.array;
       const arr = new Float32Array(src.length);
-      for (let i = 0; i < src.length; i++) arr[i] = src[i];
-      // 全 NaN 说明这个属性其实没填上，宁可不给
-      const valid = arr.some((v) => Number.isFinite(v));
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let i = 0; i < src.length; i++) {
+        const v = src[i];
+        arr[i] = v;
+        if (Number.isFinite(v)) {
+          if (v < lo) lo = v;
+          if (v > hi) hi = v;
+        }
+      }
+      // 全 NaN 说明属性没填上；全 0（或恒定值）给不出灰度层次，这两种都宁可不给
+      const valid = Number.isFinite(lo) && hi - lo > 1e-6;
       if (valid) {
         points.userData.intensity = arr;
         note = `${pos.count.toLocaleString('en-US')} 点 · 含强度${colors ? '与 RGB' : ''}`;

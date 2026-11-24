@@ -23,12 +23,15 @@ const AUX = new Set([
   'gif', 'exr', 'hdr', 'dds', 'pvr', 'basis', 'json',
 ]);
 
-export const ACCEPT = LOADERS.flatMap((l) => l.exts.map((e) => `.${e}`)).join(',');
+/** 这些扩展名能用，但要不要当主文件得看内容（目前只有 .json 属于这种） */
+const extNames = (l) => [...l.exts, ...(l.alsoExts || [])];
+
+export const ACCEPT = LOADERS.flatMap((l) => extNames(l).map((e) => `.${e}`)).join(',');
 
 export function formatList() {
   const rows = [];
   for (const l of LOADERS) {
-    rows.push({ name: l.exts.map((e) => `.${e}`).join(' / '), kind: l.kind });
+    rows.push({ name: extNames(l).map((e) => `.${e}`).join(' / '), kind: l.kind });
   }
   return rows;
 }

@@ -21,9 +21,9 @@ npm run dev        # http://localhost:5178
 | `.fbx` | 二进制与 ASCII |
 | `.ply` | 自动分辨网格、点云、高斯泼溅三种内容；保留 `intensity` 属性 |
 | `.pcd` | ASCII / binary |
-| `.las` `.laz` | LAS 1.2–1.4，点格式 0–10；LAZ 靠 WASM 解压 |
+| `.las` `.laz` | LAS 1.2–1.4，点格式 0–10；保留 RGB、分类与回波强度；LAZ 靠 WASM 解压 |
 | `.xyz` `.txt` `.pts` `.csv` | `x y z [r g b]`，逗号或空格分隔 |
-| `.jsonl` | 扫描位姿轨迹：`sensor_pose.position` + `yaw_deg` / `pitch_deg` |
+| `.jsonl` `.json` | 扫描位姿轨迹。认 `sensor_pose.position`、`pos`、`translation` 等写法，也认 `stations` / `poses` / `frames` 里挂的站点表；角度带 `_deg` 或明显大于 π 时按度，否则按弧度；没有朝向就只画站点和路径 |
 
 明确不支持：`.blend`（浏览器无法可靠解析）、`.dwg`、`.max`、`.skp`、`.e57`。
 
@@ -31,8 +31,8 @@ npm run dev        # http://localhost:5178
 
 - 拖拽打开，可一次拖多个文件，每个文件一个标签页
 - 标签页切换不重新解析；每个标签记住自己的视角、着色和点大小
-- 把 `.ply` 和位姿 `.jsonl` 一起拖进来，轨迹会自动叠到点云上（共用同一个原点）
-- 着色：按高度色带 / 文件原色 / 分类色 / 强度灰度 / 单色（强度只在文件带 `intensity` 时出现）
+- 把 `.ply` 和位姿文件（`.jsonl` 或 `.json`）一起拖进来，轨迹会自动叠到点云上（共用同一个原点）
+- 着色：按高度色带 / 文件原色 / 分类色 / 强度灰度 / 单色（后两种只在文件带对应属性时出现）
 - 点大小调节，大量点时自动缩小
 - 视口左下角比例尺随缩放变化（LAS 系按米，其它格式只显示数值）
 - 底部读数条：光标坐标、点数、面数、帧率
@@ -60,6 +60,7 @@ tools/
   make-samples.mjs     生成 public/samples 下的示例文件
   make-laz.py          scan.las → scan.laz（需要 laspy + lazrs）
   probe-laz.mjs        LAZ 解码耗时剖析
+  probe-poses.mjs      位姿文件解析自检：认出多少站位、怎么分组
 ```
 
 ## 示例文件

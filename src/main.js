@@ -4,6 +4,7 @@ import { Viewer, fmtNum } from './core/viewer.js';
 import { loadFiles, ACCEPT, formatList, isSupported } from './loaders/registry.js';
 import { buildDemoSite } from './loaders/demo.js';
 import { makeManager, applyPointScale } from './loaders/util.js';
+import { posesLoader } from './loaders/poses.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -113,9 +114,13 @@ function makeDoc(result) {
   const pointBase = applyPointScale(result.object3d);
   const stats = viewer.statsOf(result.object3d);
 
+  // 只有文件里真有这份数据，对应的着色按钮才该出现
   let hasIntensity = false;
+  let hasClasses = false;
   result.object3d.traverse((o) => {
-    if (o.isPoints && o.userData.intensity) hasIntensity = true;
+    if (!o.isPoints) return;
+    if (o.userData.intensity) hasIntensity = true;
+    if (o.userData.classes) hasClasses = true;
   });
 
   return {
@@ -132,6 +137,7 @@ function makeDoc(result) {
     center,
     stats,
     hasIntensity,
+    hasClasses,
     pointBase,
     view: null,
     prepared: false,
@@ -198,6 +204,8 @@ function activate(doc, opts = {}) {
 
   const intenBtn = ui.seg.querySelector('[data-color="intensity"]');
   if (intenBtn) intenBtn.hidden = !doc.hasIntensity;
+  const classBtn = ui.seg.querySelector('[data-color="class"]');
+  if (classBtn) classBtn.hidden = !doc.hasClasses;
 
   setSegActive(mode);
 
@@ -250,6 +258,54 @@ function groupFiles(files) {
   return groups;
 }
 
+/** .json 既可能是位姿表，也可能是配置；只看名字不够，得瞟一眼内容 */
+async function looksLikePoseJson(file) {
+  const head = await file.slice(0, 16384).text();
+  return (
+    /"(sensor_pose|stations|poses|trajectory|frames)"\s*:/.test(head) ||
+    (/"(pos|position)"\s*:\s*\[/.test(head) && /"(yaw|pitch|heading|elevation)"/.test(head))
+  );
+}
+
+/** 位姿文件不占标签页，而是叠到点云上，所以先单独挑出来 */
+async function splitPoseFiles(files) {
+  const poseFiles = [];
+  const otherFiles = [];
+  for (const f of files) {
+    const n = f.name.toLowerCase();
+    if (n.endsWith('.jsonl')) {
+      poseFiles.push(f);
+      continue;
+    }
+    if (n.endsWith('.json')) {
+      try {
+        if (await looksLikePoseJson(f)) {
+          poseFiles.push(f);
+          continue;
+        }
+      } catch {
+        /* 读不出来就当普通文件 */
+      }
+    }
+    otherFiles.push(f);
+  }
+  return { poseFiles, otherFiles };
+}
+
+/** 走和 loadFiles 同一套形状的返回，方便 makeDoc 直接吃 */
+async function loadPoseDoc(files) {
+  const t0 = performance.now();
+  const ctx = { manager: makeManager(files), renderer: viewer.renderer };
+  const res = await posesLoader.load(files, files[0], ctx);
+  return {
+    ...res,
+    elapsed: performance.now() - t0,
+    formatLabel: posesLoader.label,
+    fileName: files.map((f) => f.name).join(' + '),
+    fileSize: files.reduce((s, f) => s + f.size, 0),
+  };
+}
+
 async function openFiles(fileList) {
   const files = [...fileList];
   if (!files.length) return;
@@ -257,26 +313,26 @@ async function openFiles(fileList) {
   // 连点两次会并发跑两轮，后面的把前面没跑完的丢掉
   const sid = ++session;
 
-  const isPoses = (f) => f.name.toLowerCase().endsWith('.jsonl');
-  const poseFiles = files.filter(isPoses);
-  const otherFiles = files.filter((f) => !isPoses(f));
+  const { poseFiles, otherFiles } = await splitPoseFiles(files);
+  if (sid !== session) return;
   const groups = otherFiles.length ? groupFiles(otherFiles) : [];
 
   // 轨迹先解析好，等主文件建完再叠上去（两边的世界坐标要共用一个原点）
   let posesObject = null;
+  let posesNote = '';
   if (poseFiles.length) {
     try {
-      const ctx = { manager: makeManager(poseFiles), renderer: viewer.renderer };
-      const r = await loadFiles([poseFiles[0]], ctx);
+      const r = await loadPoseDoc(poseFiles);
       if (sid !== session) return;
       if (!groups.length) {
-        // 只拖了一个轨迹文件
-        const doc = makeDoc({ ...r, fileName: poseFiles[0].name });
+        // 只拖了轨迹文件
+        const doc = makeDoc(r);
         docs.push(doc);
         activate(doc);
         return;
       }
       posesObject = r.object3d;
+      posesNote = r.note || '';
     } catch (err) {
       console.error(err);
       toast(`轨迹没读出来：${err.message}`, true);
@@ -311,7 +367,8 @@ async function openFiles(fileList) {
         posesObject.position.set(-doc.center.x, -doc.center.y, -doc.center.z);
         doc.object3d.add(posesObject);
         doc.box = new THREE.Box3().setFromObject(doc.object3d);
-        doc.note = doc.note ? `${doc.note} · 轨迹已叠加` : '轨迹已叠加';
+        const tag = posesNote ? `轨迹已叠加（${posesNote}）` : '轨迹已叠加';
+        doc.note = doc.note ? `${doc.note} · ${tag}` : tag;
         overlaid = true;
       }
 

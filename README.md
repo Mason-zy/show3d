@@ -74,6 +74,8 @@ python tools/make-laz.py         # 生成 scan.laz，需要 pip install laspy la
 
 ## 技术备注
 
+- 线上排查用 `?debug` 打开页面会在 `window.__show3d` 挂上 `viewer` / `content` / `docs`，
+  可以直接查场景、相机和文档状态（开发模式下自动挂上）。
 - **世界坐标是 Z 轴朝上**（测绘惯例）。LAS/LAZ/PCD/XYZ/PLY/STL 直接按原坐标显示，
   底部读数就是文件里的真实坐标；glTF/OBJ/FBX 是 Y 朝上的，导入时转 90°。
 - 顶点色按线性空间写入（three 的颜色管理），否则点云会整体发白。

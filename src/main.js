@@ -46,8 +46,17 @@ const ui = {
 
 const viewer = new Viewer($('view'));
 
-if (import.meta.env.DEV) {
-  window.__show3d = { viewer, get content() { return current; } };
+// ?debug 会在线上也挂上这个钩子，方便直接查场景状态
+if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
+  window.__show3d = {
+    viewer,
+    get content() {
+      return current;
+    },
+    get docs() {
+      return docs;
+    },
+  };
 }
 
 let current = null;

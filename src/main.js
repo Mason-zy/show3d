@@ -144,6 +144,7 @@ function renderLayers(doc) {
           <span class="layer-name">${esc(l.name)}</span>
           <span class="layer-kind">${esc(KIND_LABEL[l.kind] || l.kind || '')}</span>
         </label>
+        <button class="layer-x" data-remove="${i}" title="移除这一层" aria-label="移除 ${esc(l.name)}">×</button>
       </li>`;
     })
     .join('');
@@ -758,6 +759,42 @@ ui.layerList.addEventListener('change', (e) => {
   const layer = active.layers?.[Number(input.dataset.layer)];
   if (!layer) return;
   layer.object3d.visible = input.checked;
+});
+
+/** 删掉一个图层：释放显存，重算统计；删光了就关掉整个标签 */
+function removeLayer(doc, index) {
+  const layer = doc.layers[index];
+  if (!doc || !layer) return;
+
+  doc.object3d.remove(layer.object3d);
+  viewer._disposeObject(layer.object3d);
+  doc.layers.splice(index, 1);
+
+  if (!doc.layers.length) {
+    closeDoc(doc.id);
+    return;
+  }
+
+  // 标签名跟着第一个图层走，免得删完还挂着已被删掉的文件名
+  if (index === 0) doc.name = doc.layers[0].name;
+
+  doc.sources = doc.layers.filter((l) => l.kind !== 'trajectory').length;
+  doc.box = new THREE.Box3().setFromObject(doc.object3d);
+  doc.stats = viewer.statsOf(doc.object3d);
+  const attrs = scanAttributes(doc.object3d);
+  doc.hasIntensity = attrs.hasIntensity;
+  doc.hasClasses = attrs.hasClasses;
+
+  // 尺寸变了，重新取景比留着旧视角稳妥
+  doc.view = null;
+  activate(doc, { silent: true });
+  toast(`已移除 ${layer.name}`);
+}
+
+ui.layerList.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-remove]');
+  if (!btn || !active) return;
+  removeLayer(active, Number(btn.dataset.remove));
 });
 
 /* 着色 */

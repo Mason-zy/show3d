@@ -349,13 +349,45 @@ button {
   gap: 1px;
 }
 
+.layer {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .layer-row {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 7px;
   padding: 4px 2px 4px 0;
   border-radius: 2px;
   cursor: pointer;
+}
+
+.layer-x {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.45;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.layer:hover .layer-x,
+.layer-x:focus-visible {
+  opacity: 1;
+}
+
+.layer-x:hover {
+  background: rgba(198, 58, 46, 0.1);
+  color: var(--signal);
 }
 
 .layer-row:hover {

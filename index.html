@@ -45,6 +45,9 @@
         </div>
 
         <div class="topbar-actions">
+          <button class="ghost" id="btn-overlay" aria-pressed="false" title="打开的文件叠到当前场景，不新建标签">
+            叠加
+          </button>
           <button class="ghost" id="btn-formats" aria-haspopup="dialog">支持格式</button>
           <button class="ghost" id="btn-frame">居中</button>
           <button class="ghost" id="btn-shot">截图</button>
@@ -64,6 +67,7 @@
             <dl class="specimen-rows" id="spec-rows">
               <div class="row"><dt>点数</dt><dd id="spec-points">—</dd></div>
               <div class="row"><dt>面数</dt><dd id="spec-tris">—</dd></div>
+              <div class="row" id="spec-sources-row" hidden><dt>来源</dt><dd id="spec-sources">1 个</dd></div>
               <div class="row"><dt>尺寸</dt><dd id="spec-dims">—</dd></div>
               <div class="row"><dt>载入耗时</dt><dd id="spec-time">—</dd></div>
             </dl>
@@ -76,6 +80,7 @@
               <button role="radio" class="seg-item" data-color="rgb">原色</button>
               <button role="radio" class="seg-item" data-color="class">分类</button>
               <button role="radio" class="seg-item" data-color="intensity" hidden>强度</button>
+              <button role="radio" class="seg-item" data-color="source" hidden>来源</button>
               <button role="radio" class="seg-item" data-color="solid">单色</button>
             </div>
           </section>

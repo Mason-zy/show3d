@@ -1,7 +1,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { heightRamp, classRamp, intensityRamp, uniformColor, SOLID_CHROME, SOLID_MESH } from './colors.js';
+import {
+  heightRamp,
+  classRamp,
+  intensityRamp,
+  uniformColor,
+  SOURCE_COLORS,
+  SOLID_CHROME,
+  SOLID_MESH,
+} from './colors.js';
 
 const DEG = Math.PI / 180;
 
@@ -221,7 +229,9 @@ export class Viewer {
     } else {
       this._frame();
       this._buildGrid();
-      this.setColorMode(doc.kind === 'mesh' || doc.kind === 'trajectory' ? 'solid' : 'height');
+      this.setColorMode(
+        doc.colorMode || (doc.kind === 'mesh' || doc.kind === 'trajectory' ? 'solid' : 'height')
+      );
       this.setPointSize(1);
     }
   }
@@ -423,6 +433,8 @@ export class Viewer {
           classRamp(o.userData.classes, count, arr);
         } else if (mode === 'intensity' && o.userData.intensity) {
           intensityRamp(o.userData.intensity, count, arr);
+        } else if (mode === 'source') {
+          uniformColor(SOURCE_COLORS[o.userData.sourceIndex % SOURCE_COLORS.length], count, arr);
         } else if (mode === 'rgb' && o.userData.colors) {
           arr.set(o.userData.colors);
         } else if (mode === 'solid') {
@@ -446,6 +458,13 @@ export class Viewer {
         if (mode === 'solid') {
           o.material.vertexColors = false;
           o.material.color.set(SOLID_MESH);
+          o.material.needsUpdate = true;
+          return;
+        }
+
+        if (mode === 'source') {
+          o.material.vertexColors = false;
+          o.material.color.set(SOURCE_COLORS[o.userData.sourceIndex % SOURCE_COLORS.length]);
           o.material.needsUpdate = true;
           return;
         }

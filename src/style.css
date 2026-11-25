@@ -136,6 +136,13 @@ button {
   color: var(--prussian);
 }
 
+/* 开关型按钮：叠加这类模式开着的时候要一眼看出来 */
+.ghost.is-on {
+  background: var(--prussian-wash);
+  color: var(--prussian);
+  box-shadow: inset 0 0 0 1px rgba(18, 58, 92, 0.22);
+}
+
 .btn-primary {
   margin-left: 6px;
   padding: 8px 15px;
@@ -287,6 +294,10 @@ button {
   gap: 12px;
   padding: 6px 0;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.row[hidden] {
+  display: none;
 }
 
 .row dt {
@@ -635,6 +646,18 @@ input[type="range"]:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 叠加了几个来源 */
+.tab-count {
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--prussian-wash);
+  color: var(--prussian-soft);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 1px;
 }
 
 .tab-x {

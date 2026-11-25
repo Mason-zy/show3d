@@ -30,6 +30,8 @@ npm run dev        # http://localhost:5178
 ## 功能
 
 - 拖拽打开，可一次拖多个文件，每个文件一个标签页
+- **叠加模式**：顶栏点「叠加」后，新打开的文件挂到当前场景里，不新建标签；各来源保持原始相对位置，
+  着色里多出「来源」一档，按来源分色
 - 标签页切换不重新解析；每个标签记住自己的视角、着色和点大小
 - 把 `.ply` 和位姿文件（`.jsonl` 或 `.json`）一起拖进来，轨迹会自动叠到点云上（共用同一个原点）
 - 着色：按高度色带 / 文件原色 / 分类色 / 强度灰度 / 单色（后两种只在文件带对应属性时出现）
@@ -75,6 +77,9 @@ python tools/make-laz.py         # 生成 scan.laz，需要 pip install laspy la
 - **世界坐标是 Z 轴朝上**（测绘惯例）。LAS/LAZ/PCD/XYZ/PLY/STL 直接按原坐标显示，
   底部读数就是文件里的真实坐标；glTF/OBJ/FBX 是 Y 朝上的，导入时转 90°。
 - 顶点色按线性空间写入（three 的颜色管理），否则点云会整体发白。
+- **`property double` 的 PLY 要转成 float32**：WebGL 没有双精度顶点属性，
+  three 的 `WebGLAttributes` 遇到 `Float64Array` 会直接抛 unsupported，画面一片空白
+  （Open3D 导出的 PLY 就是 double）。
 - 网格材质用 `DoubleSide`：第三方导出的文件绕序经常不一致，靠背面剔除会丢面。
 - 场景带一张程序生成的反射环境贴图：glTF 的金属材质没有环境就是一团黑。
 - `laz-perf` 的 `LASZip.open()` 必须传入**完整 LAZ 文件**，只给点数据段会抛 C++ 异常。

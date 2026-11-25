@@ -32,6 +32,9 @@ const ui = {
   specTris: $('spec-tris'),
   specDims: $('spec-dims'),
   specTime: $('spec-time'),
+  specSourcesRow: $('spec-sources-row'),
+  specSources: $('spec-sources'),
+  btnOverlay: $('btn-overlay'),
   pointSize: $('point-size'),
   pointSizeV: $('point-size-v'),
   pointsNote: $('points-note'),
@@ -51,6 +54,7 @@ let current = null;
 let toastTimer = 0;
 let dragDepth = 0;
 let session = 0;
+let overlayMode = false;
 
 const docs = [];
 let demoDoc = null;
@@ -109,18 +113,27 @@ function normalize(result) {
   return { box: new THREE.Box3().setFromObject(object3d), center };
 }
 
+/** 统计一份对象里有哪些可选着色数据 */
+function scanAttributes(root) {
+  let hasIntensity = false;
+  let hasClasses = false;
+  root.traverse((o) => {
+    if (!o.isPoints) return;
+    if (o.userData.intensity) hasIntensity = true;
+    if (o.userData.classes) hasClasses = true;
+  });
+  return { hasIntensity, hasClasses };
+}
+
 function makeDoc(result) {
   const { box, center } = normalize(result);
   const pointBase = applyPointScale(result.object3d);
   const stats = viewer.statsOf(result.object3d);
+  const { hasIntensity, hasClasses } = scanAttributes(result.object3d);
 
-  // 只有文件里真有这份数据，对应的着色按钮才该出现
-  let hasIntensity = false;
-  let hasClasses = false;
+  // 叠加时按来源分色，第一个来源就是 0 号
   result.object3d.traverse((o) => {
-    if (!o.isPoints) return;
-    if (o.userData.intensity) hasIntensity = true;
-    if (o.userData.classes) hasClasses = true;
+    if (o.userData.sourceIndex === undefined) o.userData.sourceIndex = 0;
   });
 
   return {
@@ -139,6 +152,8 @@ function makeDoc(result) {
     hasIntensity,
     hasClasses,
     pointBase,
+    sources: 1,
+    sourceNames: [result.fileName || '示例'],
     view: null,
     prepared: false,
     colorMode: result.kind === 'mesh' || result.kind === 'trajectory' ? 'solid' : 'height',
@@ -156,6 +171,9 @@ function updateSpecimen(doc) {
   ui.specTris.textContent = doc.stats.triangles ? fmtNum(doc.stats.triangles) : '—';
   ui.specDims.textContent = `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)}`;
   ui.specTime.textContent = doc.elapsed ? `${Math.round(doc.elapsed)} ms` : '—';
+
+  ui.specSourcesRow.hidden = (doc.sources || 1) < 2;
+  ui.specSources.textContent = `${doc.sources} 个`;
 
   ui.roPoints.textContent = fmtNum(doc.stats.points);
   ui.roTris.textContent = fmtNum(doc.stats.triangles);
@@ -178,14 +196,16 @@ function esc(s) {
 function renderTabs() {
   ui.tabs.hidden = docs.length === 0;
   ui.tabList.innerHTML = docs
-    .map(
-      (d) => `<div class="tab${d === active ? ' is-on' : ''}" data-id="${d.id}" draggable="true">
-        <button class="tab-main" data-id="${d.id}" title="${esc(d.name)}">
-          <span class="tab-name">${esc(d.name)}</span>
+    .map((d) => {
+      const extra = d.sources > 1 ? `<span class="tab-count">+${d.sources - 1}</span>` : '';
+      const title = d.sources > 1 ? d.sourceNames.join('\n') : d.name;
+      return `<div class="tab${d === active ? ' is-on' : ''}" data-id="${d.id}" draggable="true">
+        <button class="tab-main" data-id="${d.id}" title="${esc(title)}">
+          <span class="tab-name">${esc(d.name)}</span>${extra}
         </button>
         <button class="tab-x" data-close="${d.id}" title="关闭">×</button>
-      </div>`
-    )
+      </div>`;
+    })
     .join('');
 }
 
@@ -200,12 +220,16 @@ function activate(doc, opts = {}) {
   viewer.setAutoRotate($('opt-spin').checked);
 
   const mode =
-    doc.view?.mode || (doc.kind === 'mesh' || doc.kind === 'trajectory' ? 'solid' : 'height');
+    doc.view?.mode ||
+    doc.colorMode ||
+    (doc.kind === 'mesh' || doc.kind === 'trajectory' ? 'solid' : 'height');
 
   const intenBtn = ui.seg.querySelector('[data-color="intensity"]');
   if (intenBtn) intenBtn.hidden = !doc.hasIntensity;
   const classBtn = ui.seg.querySelector('[data-color="class"]');
   if (classBtn) classBtn.hidden = !doc.hasClasses;
+  const sourceBtn = ui.seg.querySelector('[data-color="source"]');
+  if (sourceBtn) sourceBtn.hidden = (doc.sources || 1) < 2;
 
   setSegActive(mode);
 
@@ -306,6 +330,41 @@ async function loadPoseDoc(files) {
   };
 }
 
+/**
+ * 叠加：把新对象挂到已有文档上，共用第一个文件的坐标原点。
+ * 各来源之间的相对位置保持不变，所以两个点云对得上。
+ */
+function addOverlay(doc, result, name) {
+  const obj = result.object3d;
+  if ((result.upAxis || 'z') === 'y') obj.rotation.x += Math.PI / 2;
+  obj.position.sub(doc.center);
+  obj.updateMatrixWorld(true);
+
+  const idx = doc.sources;
+  obj.traverse((o) => {
+    if (o.userData.sourceIndex === undefined) o.userData.sourceIndex = idx;
+  });
+  doc.object3d.add(obj);
+  doc.sources += 1;
+  doc.sourceNames.push(name);
+
+  viewer._prepareMaterials(obj);
+  doc.pointBase = applyPointScale(doc.object3d);
+
+  doc.box = new THREE.Box3().setFromObject(doc.object3d);
+  doc.stats = viewer.statsOf(doc.object3d);
+  const attrs = scanAttributes(doc.object3d);
+  doc.hasIntensity = attrs.hasIntensity;
+  doc.hasClasses = attrs.hasClasses;
+  doc.fileSize += result.fileSize || 0;
+  doc.elapsed += result.elapsed || 0;
+
+  // 重新取景，并默认按来源分色——叠了这么多，先分得清谁是谁
+  doc.view = null;
+  doc.colorMode = 'source';
+  doc.note = `已叠加 ${doc.sources} 个对象`;
+}
+
 async function openFiles(fileList) {
   const files = [...fileList];
   if (!files.length) return;
@@ -359,6 +418,22 @@ async function openFiles(fileList) {
       const result = await loadFiles(g.files, ctx);
       hideToast();
       if (sid !== session) return;
+
+      // 叠加模式：挂到当前文档上，不新建标签（示例场地不算，它只是个占位）
+      if (overlayMode && active && docs.includes(active)) {
+        addOverlay(active, result, main.name);
+
+        if (posesObject && !overlaid) {
+          posesObject.position.set(-active.center.x, -active.center.y, -active.center.z);
+          active.object3d.add(posesObject);
+          active.box = new THREE.Box3().setFromObject(active.object3d);
+          overlaid = true;
+        }
+
+        activate(active, { silent: true });
+        toast(`已叠加 ${main.name}（共 ${active.sources} 个对象）`);
+        continue;
+      }
 
       const doc = makeDoc(result);
 
@@ -564,6 +639,24 @@ $('btn-rail').addEventListener('click', () => {
 
 $('btn-frame').addEventListener('click', () => viewer.frameContent());
 $('view').addEventListener('dblclick', () => viewer.frameContent());
+
+/* 叠加模式：新打开的文件挂到当前场景上 */
+ui.btnOverlay.addEventListener('click', () => {
+  overlayMode = !overlayMode;
+  const btn = ui.btnOverlay;
+  btn.classList.toggle('is-on', overlayMode);
+  btn.setAttribute('aria-pressed', String(overlayMode));
+  btn.title = overlayMode
+    ? '新打开的文件叠到当前场景，不新建标签（再点一次关闭）'
+    : '打开的文件叠到当前场景，不新建标签';
+  toast(
+    overlayMode
+      ? '叠加模式：新打开的文件会挂到当前场景上'
+      : '已退出叠加模式，新文件各自开标签',
+    false,
+    false
+  );
+});
 
 /* 格式弹层 */
 $('btn-formats').addEventListener('click', (e) => {

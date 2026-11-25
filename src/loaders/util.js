@@ -64,7 +64,26 @@ export function makePoints(positions, colors, classes, size = 0.05) {
   return points;
 }
 
+/**
+ * three 的渲染器只认 float32 顶点属性（WebGL 没有双精度），
+ * 而 PLY 的 `property double` 会被解析成 Float64BufferAttribute，
+ * 上传时直接抛 "Unsupported buffer data format"，画面一片空白。
+ * 所以进场景前统一降精度——坐标是米级，float32 的 7 位有效数字足够。
+ */
+export function toFloat32(geometry) {
+  for (const name of Object.keys(geometry.attributes)) {
+    const attr = geometry.attributes[name];
+    if (!(attr.array instanceof Float64Array)) continue;
+    geometry.setAttribute(
+      name,
+      new THREE.BufferAttribute(new Float32Array(attr.array), attr.itemSize, attr.normalized)
+    );
+  }
+  return geometry;
+}
+
 export function makeMesh(geometry, { flat = false, color = 0x8f9c96 } = {}) {
+  toFloat32(geometry);
   if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({
     color,

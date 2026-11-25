@@ -193,3 +193,18 @@ export function intensityRamp(values, count, target) {
 
 export const SOLID_CHROME = 0x3f5668;
 export const SOLID_MESH = 0x7f919c;
+
+/**
+ * 叠加模式下按来源分配的颜色。八个一组，饱和度和明度都压住，
+ * 多个点云叠在一起时能分得清，又不至于抢戏。
+ */
+export const SOURCE_COLORS = [
+  0x2f6d8f, // 普鲁士
+  0xc0603f, // 陶红
+  0x5f8a4a, // 苔绿
+  0x8a6aa8, // 灰紫
+  0xb0913a, // 赭黄
+  0x3f8880, // 青灰
+  0xa8627a, // 绛
+  0x6b7f9a, // 蓝灰
+];

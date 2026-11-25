@@ -163,12 +163,17 @@ function scanAttributes(root) {
 
 function makeDoc(result) {
   const { box, center } = normalize(result);
-  const pointBase = applyPointScale(result.object3d);
-  const stats = viewer.statsOf(result.object3d);
-  const { hasIntensity, hasClasses } = scanAttributes(result.object3d);
+
+  // 文档根节点是空容器，每个文件都是它的子节点。
+  // 这样"隐藏第一个图层"只隐藏那个文件，不会连叠加进来的对象一起干掉。
+  const root = new THREE.Group();
+  root.add(result.object3d);
+  const pointBase = applyPointScale(root);
+  const stats = viewer.statsOf(root);
+  const { hasIntensity, hasClasses } = scanAttributes(root);
 
   // 叠加时按来源分色，第一个来源就是 0 号
-  result.object3d.traverse((o) => {
+  root.traverse((o) => {
     if (o.userData.sourceIndex === undefined) o.userData.sourceIndex = 0;
   });
 
@@ -181,7 +186,7 @@ function makeDoc(result) {
     note: result.note,
     units: result.units || null,
     kind: result.kind,
-    object3d: result.object3d,
+    object3d: root,
     box,
     center,
     stats,
@@ -374,13 +379,26 @@ async function loadPoseDoc(files) {
 }
 
 /**
+ * 把子对象摆到文档原点（-center）。
+ * 注意：点云的居中是改几何体、根节点留在原点；网格和轨迹的居中是把
+ * 根节点挪到 -center。所以子对象不能直接减 center，必须换算到父节点的
+ * 局部坐标，否则叠在网格/轨迹上的对象会被平移两遍。
+ */
+function placeAtDocOrigin(child, doc) {
+  const target = new THREE.Vector3(-doc.center.x, -doc.center.y, -doc.center.z);
+  doc.object3d.updateMatrixWorld(true);
+  child.position.copy(target);
+  doc.object3d.worldToLocal(child.position);
+}
+
+/**
  * 叠加：把新对象挂到已有文档上，共用第一个文件的坐标原点。
  * 各来源之间的相对位置保持不变，所以两个点云对得上。
  */
 function addOverlay(doc, result, name) {
   const obj = result.object3d;
   if ((result.upAxis || 'z') === 'y') obj.rotation.x += Math.PI / 2;
-  obj.position.sub(doc.center);
+  placeAtDocOrigin(obj, doc);
   obj.updateMatrixWorld(true);
 
   const idx = doc.sources;
@@ -469,7 +487,7 @@ async function openFiles(fileList) {
         addOverlay(active, result, main.name);
 
         if (posesObject && !overlaid) {
-          posesObject.position.set(-active.center.x, -active.center.y, -active.center.z);
+          placeAtDocOrigin(posesObject, active);
           active.object3d.add(posesObject);
           active.layers.push({ name: '位姿轨迹', object3d: posesObject, kind: 'trajectory' });
           active.box = new THREE.Box3().setFromObject(active.object3d);
@@ -485,7 +503,7 @@ async function openFiles(fileList) {
 
       // 轨迹叠到第一个 Z 朝上的主文件上
       if (posesObject && !overlaid && result.upAxis !== 'y') {
-        posesObject.position.set(-doc.center.x, -doc.center.y, -doc.center.z);
+        placeAtDocOrigin(posesObject, doc);
         doc.object3d.add(posesObject);
         doc.layers.push({ name: '位姿轨迹', object3d: posesObject, kind: 'trajectory' });
         doc.box = new THREE.Box3().setFromObject(doc.object3d);

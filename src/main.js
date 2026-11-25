@@ -5,6 +5,7 @@ import { loadFiles, ACCEPT, formatList, isSupported } from './loaders/registry.j
 import { buildDemoSite } from './loaders/demo.js';
 import { makeManager, applyPointScale } from './loaders/util.js';
 import { posesLoader } from './loaders/poses.js';
+import { SOURCE_COLORS } from './core/colors.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,6 +36,9 @@ const ui = {
   specSourcesRow: $('spec-sources-row'),
   specSources: $('spec-sources'),
   btnOverlay: $('btn-overlay'),
+  groupLayers: $('group-layers'),
+  layersCount: $('layers-count'),
+  layerList: $('layer-list'),
   pointSize: $('point-size'),
   pointSizeV: $('point-size-v'),
   pointsNote: $('points-note'),
@@ -122,6 +126,29 @@ function normalize(result) {
   return { box: new THREE.Box3().setFromObject(object3d), center };
 }
 
+/** 来源类型的中文名，图层列表里显示 */
+const KIND_LABEL = { cloud: '点云', mesh: '网格', trajectory: '轨迹', both: '点云' };
+
+/** 侧栏图层列表：一行一个来源，勾选框就是显示/隐藏 */
+function renderLayers(doc) {
+  const layers = doc?.layers || [];
+  ui.groupLayers.hidden = layers.length === 0;
+  ui.layersCount.textContent = layers.length > 1 ? `${layers.length} 个` : '';
+  ui.layerList.innerHTML = layers
+    .map((l, i) => {
+      const color = `#${SOURCE_COLORS[i % SOURCE_COLORS.length].toString(16).padStart(6, '0')}`;
+      return `<li class="layer">
+        <label class="layer-row" title="${esc(l.name)}">
+          <input type="checkbox" data-layer="${i}" ${l.object3d.visible ? 'checked' : ''} />
+          <span class="layer-dot" style="--c:${color}"></span>
+          <span class="layer-name">${esc(l.name)}</span>
+          <span class="layer-kind">${esc(KIND_LABEL[l.kind] || l.kind || '')}</span>
+        </label>
+      </li>`;
+    })
+    .join('');
+}
+
 /** 统计一份对象里有哪些可选着色数据 */
 function scanAttributes(root) {
   let hasIntensity = false;
@@ -162,7 +189,13 @@ function makeDoc(result) {
     hasClasses,
     pointBase,
     sources: 1,
-    sourceNames: [result.fileName || '示例'],
+    layers: [
+      {
+        name: result.fileName || '示例',
+        object3d: result.object3d,
+        kind: result.kind,
+      },
+    ],
     view: null,
     prepared: false,
     colorMode: result.kind === 'mesh' || result.kind === 'trajectory' ? 'solid' : 'height',
@@ -181,8 +214,8 @@ function updateSpecimen(doc) {
   ui.specDims.textContent = `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)}`;
   ui.specTime.textContent = doc.elapsed ? `${Math.round(doc.elapsed)} ms` : '—';
 
-  ui.specSourcesRow.hidden = (doc.sources || 1) < 2;
-  ui.specSources.textContent = `${doc.sources} 个`;
+  ui.specSourcesRow.hidden = (doc.layers?.length || 0) < 2;
+  ui.specSources.textContent = `${doc.layers?.length || 0} 个`;
 
   ui.roPoints.textContent = fmtNum(doc.stats.points);
   ui.roTris.textContent = fmtNum(doc.stats.triangles);
@@ -206,8 +239,9 @@ function renderTabs() {
   ui.tabs.hidden = docs.length === 0;
   ui.tabList.innerHTML = docs
     .map((d) => {
-      const extra = d.sources > 1 ? `<span class="tab-count">+${d.sources - 1}</span>` : '';
-      const title = d.sources > 1 ? d.sourceNames.join('\n') : d.name;
+      const layers = d.layers || [];
+      const extra = layers.length > 1 ? `<span class="tab-count">+${layers.length - 1}</span>` : '';
+      const title = layers.length > 1 ? layers.map((l) => l.name).join('\n') : d.name;
       return `<div class="tab${d === active ? ' is-on' : ''}" data-id="${d.id}" draggable="true">
         <button class="tab-main" data-id="${d.id}" title="${esc(title)}">
           <span class="tab-name">${esc(d.name)}</span>${extra}
@@ -239,7 +273,6 @@ function activate(doc, opts = {}) {
   if (classBtn) classBtn.hidden = !doc.hasClasses;
   const sourceBtn = ui.seg.querySelector('[data-color="source"]');
   if (sourceBtn) sourceBtn.hidden = (doc.sources || 1) < 2;
-
   setSegActive(mode);
 
   const mult = doc.view?.size ?? 1;
@@ -247,6 +280,7 @@ function activate(doc, opts = {}) {
   ui.pointSizeV.textContent = (mult * 1.4).toFixed(1);
 
   updateSpecimen(doc);
+  renderLayers(doc);
   renderTabs();
 
   ui.empty.classList.toggle('is-hidden', docs.length > 0);
@@ -355,7 +389,7 @@ function addOverlay(doc, result, name) {
   });
   doc.object3d.add(obj);
   doc.sources += 1;
-  doc.sourceNames.push(name);
+  doc.layers.push({ name, object3d: obj, kind: result.kind });
 
   viewer._prepareMaterials(obj);
   doc.pointBase = applyPointScale(doc.object3d);
@@ -368,10 +402,12 @@ function addOverlay(doc, result, name) {
   doc.fileSize += result.fileSize || 0;
   doc.elapsed += result.elapsed || 0;
 
-  // 重新取景，并默认按来源分色——叠了这么多，先分得清谁是谁
-  doc.view = null;
-  doc.colorMode = 'source';
-  doc.note = `已叠加 ${doc.sources} 个对象`;
+  // 第一次叠加重新取景（新数据可能远得多），之后保持当前视角，免得每次拖都跳
+  if (doc.sources === 2) {
+    doc.view = null;
+    doc.colorMode = 'source';
+  }
+  doc.note = `已叠加 ${doc.layers.length} 个对象`;
 }
 
 async function openFiles(fileList) {
@@ -435,12 +471,13 @@ async function openFiles(fileList) {
         if (posesObject && !overlaid) {
           posesObject.position.set(-active.center.x, -active.center.y, -active.center.z);
           active.object3d.add(posesObject);
+          active.layers.push({ name: '位姿轨迹', object3d: posesObject, kind: 'trajectory' });
           active.box = new THREE.Box3().setFromObject(active.object3d);
           overlaid = true;
         }
 
         activate(active, { silent: true });
-        toast(`已叠加 ${main.name}（共 ${active.sources} 个对象）`);
+        toast(`已叠加 ${main.name}（共 ${active.layers.length} 个对象）`);
         continue;
       }
 
@@ -450,6 +487,7 @@ async function openFiles(fileList) {
       if (posesObject && !overlaid && result.upAxis !== 'y') {
         posesObject.position.set(-doc.center.x, -doc.center.y, -doc.center.z);
         doc.object3d.add(posesObject);
+        doc.layers.push({ name: '位姿轨迹', object3d: posesObject, kind: 'trajectory' });
         doc.box = new THREE.Box3().setFromObject(doc.object3d);
         const tag = posesNote ? `轨迹已叠加（${posesNote}）` : '轨迹已叠加';
         doc.note = doc.note ? `${doc.note} · ${tag}` : tag;
@@ -683,6 +721,15 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') ui.popover.hidden = true;
+});
+
+/* 图层显隐 */
+ui.layerList.addEventListener('change', (e) => {
+  const input = e.target.closest('input[data-layer]');
+  if (!input || !active) return;
+  const layer = active.layers?.[Number(input.dataset.layer)];
+  if (!layer) return;
+  layer.object3d.visible = input.checked;
 });
 
 /* 着色 */

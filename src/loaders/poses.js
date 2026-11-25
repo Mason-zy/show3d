@@ -72,6 +72,8 @@ function toRow(entry) {
     pos = vec3(pose?.[k]) || vec3(entry[k]);
     if (pos) break;
   }
+  // 也认扁平写法：{ id, x, y, z }
+  if (!pos) pos = vec3(pose) || vec3(entry);
   if (!pos) return null;
 
   const yaw = pickAngle(pose, entry, YAW_KEYS);

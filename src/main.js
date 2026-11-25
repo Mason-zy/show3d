@@ -391,6 +391,15 @@ function placeAtDocOrigin(child, doc) {
   doc.object3d.worldToLocal(child.position);
 }
 
+/** 把位姿轨迹作为一个图层挂到文档上 */
+function attachTrajectory(doc, posesObject) {
+  placeAtDocOrigin(posesObject, doc);
+  doc.object3d.add(posesObject);
+  doc.layers.push({ name: '位姿轨迹', object3d: posesObject, kind: 'trajectory' });
+  doc.box = new THREE.Box3().setFromObject(doc.object3d);
+  doc.stats = viewer.statsOf(doc.object3d);
+}
+
 /**
  * 叠加：把新对象挂到已有文档上，共用第一个文件的坐标原点。
  * 各来源之间的相对位置保持不变，所以两个点云对得上。
@@ -447,7 +456,14 @@ async function openFiles(fileList) {
       const r = await loadPoseDoc(poseFiles);
       if (sid !== session) return;
       if (!groups.length) {
-        // 只拖了轨迹文件
+        // 只拖了轨迹文件：已经在看某个场景就叠上去，否则单独开一个标签
+        const target = active && docs.includes(active) ? active : null;
+        if (target) {
+          attachTrajectory(target, r.object3d);
+          activate(target, { silent: true });
+          toast(`轨迹已叠加到当前场景（${r.note || '位姿轨迹'}）`);
+          return;
+        }
         const doc = makeDoc(r);
         docs.push(doc);
         activate(doc);
@@ -487,10 +503,7 @@ async function openFiles(fileList) {
         addOverlay(active, result, main.name);
 
         if (posesObject && !overlaid) {
-          placeAtDocOrigin(posesObject, active);
-          active.object3d.add(posesObject);
-          active.layers.push({ name: '位姿轨迹', object3d: posesObject, kind: 'trajectory' });
-          active.box = new THREE.Box3().setFromObject(active.object3d);
+          attachTrajectory(active, posesObject);
           overlaid = true;
         }
 
@@ -503,10 +516,7 @@ async function openFiles(fileList) {
 
       // 轨迹叠到第一个 Z 朝上的主文件上
       if (posesObject && !overlaid && result.upAxis !== 'y') {
-        placeAtDocOrigin(posesObject, doc);
-        doc.object3d.add(posesObject);
-        doc.layers.push({ name: '位姿轨迹', object3d: posesObject, kind: 'trajectory' });
-        doc.box = new THREE.Box3().setFromObject(doc.object3d);
+        attachTrajectory(doc, posesObject);
         const tag = posesNote ? `轨迹已叠加（${posesNote}）` : '轨迹已叠加';
         doc.note = doc.note ? `${doc.note} · ${tag}` : tag;
         overlaid = true;

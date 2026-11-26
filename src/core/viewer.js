@@ -211,6 +211,11 @@ export class Viewer {
     this.content = doc;
     this.contentGroup.add(doc.object3d);
 
+    // 网格走 ACES（和 Blender 的 Filmic/AgX 观感接近，高光不糊成一片白）；
+    // 点云保持线性输出，否则色带会被压暗、颜色失真。
+    this.renderer.toneMapping = doc.kind === 'mesh' ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+
     if (!doc.prepared) {
       this._prepareMaterials(doc.object3d);
       doc.prepared = true;
@@ -230,7 +235,8 @@ export class Viewer {
       this._frame();
       this._buildGrid();
       this.setColorMode(
-        doc.colorMode || (doc.kind === 'mesh' || doc.kind === 'trajectory' ? 'solid' : 'height')
+        doc.colorMode ||
+          (doc.kind === 'mesh' ? 'rgb' : doc.kind === 'trajectory' ? 'solid' : 'height')
       );
       this.setPointSize(1);
     }
@@ -285,6 +291,8 @@ export class Viewer {
           g.userData._count = g.getAttribute('position')?.count || 0;
         }
         o.material = o.material.clone();
+        // 记住材质原来的基色，切回"原色"时要还原
+        o.material.userData.origColor = o.material.color.getHex();
       } else if (o.isPoints && o.geometry) {
         o.material = o.material.clone();
       }
@@ -465,6 +473,16 @@ export class Viewer {
         if (mode === 'source') {
           o.material.vertexColors = false;
           o.material.color.set(SOURCE_COLORS[o.userData.sourceIndex % SOURCE_COLORS.length]);
+          o.material.needsUpdate = true;
+          return;
+        }
+
+        // 原色：文件自己的材质（贴图 + 基色）就是原色，网格没有顶点色时不要动它。
+        // 之前这里会退回高度色带，把贴图和基色全盖掉，看起来像一片绿。
+        if (mode === 'rgb' && !geo.userData._origColor) {
+          o.material.vertexColors = false;
+          const orig = o.material.userData?.origColor;
+          if (orig !== undefined) o.material.color.setHex(orig);
           o.material.needsUpdate = true;
           return;
         }

@@ -204,7 +204,7 @@ function makeDoc(result) {
     ],
     view: null,
     prepared: false,
-    colorMode: result.kind === 'mesh' || result.kind === 'trajectory' ? 'solid' : 'height',
+    colorMode: result.kind === 'mesh' ? 'rgb' : result.kind === 'trajectory' ? 'solid' : 'height',
   };
 }
 
@@ -271,7 +271,7 @@ function activate(doc, opts = {}) {
   const mode =
     doc.view?.mode ||
     doc.colorMode ||
-    (doc.kind === 'mesh' || doc.kind === 'trajectory' ? 'solid' : 'height');
+    (doc.kind === 'mesh' ? 'rgb' : doc.kind === 'trajectory' ? 'solid' : 'height');
 
   const intenBtn = ui.seg.querySelector('[data-color="intensity"]');
   if (intenBtn) intenBtn.hidden = !doc.hasIntensity;

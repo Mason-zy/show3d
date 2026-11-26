@@ -457,8 +457,9 @@ async function openFiles(fileList) {
       const r = await loadPoseDoc(poseFiles);
       if (sid !== session) return;
       if (!groups.length) {
-        // 只拖了轨迹文件：已经在看某个场景就叠上去，否则单独开一个标签
-        const target = active && docs.includes(active) ? active : null;
+        // 只拖了轨迹文件：和点云一样看「叠加」开关——
+        // 开着就挂到当前场景，关着就自己开一个标签
+        const target = overlayMode && active && docs.includes(active) ? active : null;
         if (target) {
           attachTrajectory(target, r.object3d);
           activate(target, { silent: true });
@@ -466,6 +467,8 @@ async function openFiles(fileList) {
           return;
         }
         const doc = makeDoc(r);
+        const hint = '开「叠加」后拖入会叠到当前场景';
+        doc.note = doc.note ? `${doc.note} · ${hint}` : hint;
         docs.push(doc);
         activate(doc);
         return;

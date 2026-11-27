@@ -44,7 +44,26 @@ export function makeManager(files) {
   return manager;
 }
 
-export function makePoints(positions, colors, classes, size = 0.05) {
+/**
+ * 顶点色统一成 0–1 的 Float32。
+ * three 的 loader 有的给 Float32（已经是 0–1），有的给 normalized Uint8（0–255），
+ * 直接 `new Float32Array(attr.array)` 会把 0–255 当成 0–1，颜色全部糊成白色。
+ */
+export function colorToUnit(attr) {
+  const src = attr.array;
+  const out = new Float32Array(src.length);
+  const max = src instanceof Uint8Array ? 255 : src instanceof Uint16Array ? 65535 : src instanceof Int8Array ? 127 : 0;
+  const k = max && (attr.normalized || max === 255) ? 1 / max : 1;
+  for (let i = 0; i < src.length; i++) out[i] = src[i] * k;
+  return out;
+}
+
+/**
+ * colorsLinear：调用方给的颜色是不是已经在**线性空间**。
+ * three 的 PLYLoader / PCDLoader 内部已经做过 sRGB→线性（Color.setRGB(..., SRGBColorSpace)），
+ * 传 true 就不要再转一次，否则颜色会整体压暗。
+ */
+export function makePoints(positions, colors, classes, size = 0.05, colorsLinear = false) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.PointsMaterial({
@@ -55,10 +74,15 @@ export function makePoints(positions, colors, classes, size = 0.05) {
   });
   const points = new THREE.Points(geo, mat);
   if (colors) {
-    // 文件里的 RGB 是 sRGB，顶点色要线性
-    for (let i = 0; i < colors.length; i++) colors[i] = lin(colors[i]);
+    if (!colorsLinear) {
+      for (let i = 0; i < colors.length; i++) colors[i] = lin(colors[i]);
+    }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    points.userData.colors = colors;
+    // 属性缓冲会被"单色/高度/强度"这几种模式覆盖，原始色另存一份。
+    // 按 8 位存：源数据本来就是 8 位，千万点也只多占 3 字节/点。
+    const c8 = new Uint8Array(colors.length);
+    for (let i = 0; i < colors.length; i++) c8[i] = Math.round(colors[i] * 255);
+    points.userData.colors8 = c8;
   }
   if (classes) points.userData.classes = classes;
   return points;

@@ -154,12 +154,14 @@ function renderLayers(doc) {
 function scanAttributes(root) {
   let hasIntensity = false;
   let hasClasses = false;
+  let hasColors = false;
   root.traverse((o) => {
     if (!o.isPoints) return;
     if (o.userData.intensity) hasIntensity = true;
     if (o.userData.classes) hasClasses = true;
+    if (o.userData.colors8) hasColors = true;
   });
-  return { hasIntensity, hasClasses };
+  return { hasIntensity, hasClasses, hasColors };
 }
 
 function makeDoc(result) {
@@ -171,7 +173,7 @@ function makeDoc(result) {
   root.add(result.object3d);
   const pointBase = applyPointScale(root);
   const stats = viewer.statsOf(root);
-  const { hasIntensity, hasClasses } = scanAttributes(root);
+  const { hasIntensity, hasClasses, hasColors } = scanAttributes(root);
 
   // 叠加时按来源分色，第一个来源就是 0 号
   root.traverse((o) => {
@@ -204,7 +206,15 @@ function makeDoc(result) {
     ],
     view: null,
     prepared: false,
-    colorMode: result.kind === 'mesh' ? 'rgb' : result.kind === 'trajectory' ? 'solid' : 'height',
+    // 文件自带颜色就直接显示（语义着色、照片色都是这样），否则按高度看起伏
+    colorMode:
+      result.kind === 'mesh'
+        ? 'rgb'
+        : result.kind === 'trajectory'
+          ? 'solid'
+          : hasColors
+            ? 'rgb'
+            : 'height',
   };
 }
 

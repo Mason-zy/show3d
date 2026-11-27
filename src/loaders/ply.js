@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
-import { makeMesh, makePoints } from './util.js';
+import { makeMesh, makePoints, colorToUnit } from './util.js';
 
 const TYPE_SIZE = {
   char: 1, int8: 1, uchar: 1, uint8: 1,
@@ -173,6 +173,13 @@ export const plyLoader = {
     if (hasIntensityProp) loader.setCustomPropertyNameMapping({ intensity: ['intensity'] });
     const geo = loader.parse(buf);
 
+    // PLY 的 uchar 颜色会被读成 normalized Uint8（0–255），
+    // 后面按顶点色用时一律当 0–1，先统一成 Float32
+    const srcColor = geo.getAttribute('color');
+    if (srcColor && !(srcColor.array instanceof Float32Array)) {
+      geo.setAttribute('color', new THREE.BufferAttribute(colorToUnit(srcColor), 3));
+    }
+
     if (head.isMesh) {
       const mesh = makeMesh(geo, { color: 0x93a09a });
       mesh.material.roughness = 0.78;
@@ -184,7 +191,8 @@ export const plyLoader = {
     const positions = new Float32Array(pos.array);
     const colors = colorAttr ? new Float32Array(colorAttr.array) : null;
     if (colors && colors.length > pos.count * 3) colors.length = pos.count * 3;
-    const points = makePoints(positions, colors, null);
+    // PLYLoader 已经做过 sRGB→线性，这里不要再转
+    const points = makePoints(positions, colors, null, 0.05, true);
 
     const inten = hasIntensityProp ? geo.getAttribute('intensity') : null;
     let note;

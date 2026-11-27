@@ -443,8 +443,9 @@ export class Viewer {
           intensityRamp(o.userData.intensity, count, arr);
         } else if (mode === 'source') {
           uniformColor(SOURCE_COLORS[o.userData.sourceIndex % SOURCE_COLORS.length], count, arr);
-        } else if (mode === 'rgb' && o.userData.colors) {
-          arr.set(o.userData.colors);
+        } else if (mode === 'rgb' && o.userData.colors8) {
+          const c8 = o.userData.colors8;
+          for (let i = 0; i < arr.length; i++) arr[i] = c8[i] / 255;
         } else if (mode === 'solid') {
           uniformColor(SOLID_CHROME, count, arr);
         } else {

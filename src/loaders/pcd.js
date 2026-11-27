@@ -18,7 +18,8 @@ export const pcdLoader = {
     const c = geo.getAttribute('color');
     const colors = c ? new Float32Array(c.array) : null;
 
-    const points = makePoints(positions, colors, null);
+    // PCDLoader 同样已经转成线性
+    const points = makePoints(positions, colors, null, 0.05, true);
     return {
       object3d: points,
       kind: 'cloud',

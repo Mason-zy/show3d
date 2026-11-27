@@ -81,6 +81,8 @@ python tools/make-laz.py         # 生成 scan.laz，需要 pip install laspy la
 - **世界坐标是 Z 轴朝上**（测绘惯例）。LAS/LAZ/PCD/XYZ/PLY/STL 直接按原坐标显示，
   底部读数就是文件里的真实坐标；glTF/OBJ/FBX 是 Y 朝上的，导入时转 90°。
 - 顶点色按线性空间写入（three 的颜色管理），否则点云会整体发白。
+  但 **PLY/PCD 不要再转一次**：three 的 PLYLoader、PCDLoader 内部已经做过
+  `sRGB→线性`，再转会把颜色压暗一层（灰色 224 会显示成 190）。
 - **`property double` 的 PLY 要转成 float32**：WebGL 没有双精度顶点属性，
   three 的 `WebGLAttributes` 遇到 `Float64Array` 会直接抛 unsupported，画面一片空白
   （Open3D 导出的 PLY 就是 double）。
